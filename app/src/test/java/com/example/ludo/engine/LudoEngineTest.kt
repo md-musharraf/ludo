@@ -14,6 +14,25 @@ class LudoEngineTest {
     }
 
     @Test
+    fun testBoardConfigSnakesAndLadders() {
+        assertEquals("There must be exactly 4 ladders", 4, BoardConfig.ladders.size)
+        assertEquals("There must be exactly 4 snakes", 4, BoardConfig.snakes.size)
+
+        // Verify none of the ladders or snakes touch safe spots
+        for (ladder in BoardConfig.ladders) {
+            assertFalse("Ladder base must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(ladder.fromTrackIndex))
+            assertFalse("Ladder top must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(ladder.toTrackIndex))
+            assertTrue("Ladder must climb forward (+8 steps)", ladder.toTrackIndex - ladder.fromTrackIndex == 8)
+        }
+
+        for (snake in BoardConfig.snakes) {
+            assertFalse("Snake head must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(snake.fromTrackIndex))
+            assertFalse("Snake tail must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(snake.toTrackIndex))
+            assertTrue("Snake must slide backward (-8 steps)", snake.fromTrackIndex - snake.toTrackIndex == 8)
+        }
+    }
+
+    @Test
     fun testPathMapperForRed() {
         val redPath = PathMapper.getPlayerPath(0) // Red
         assertEquals("Player path must have 57 positions (51 track + 6 home)", 57, redPath.size)
@@ -49,7 +68,7 @@ class LudoEngineTest {
     fun testMoveValidatorInHome() {
         val validator = MoveValidator()
         val tokenInHome = Token(id = 0, playerId = 0, state = TokenState.IN_HOME)
-        val dummyState = GameState()
+        val dummyState = GameState(players = listOf(Player(id = 0, color = PlayerColor.RED, name = "Red", isAI = false, tokens = listOf(tokenInHome))))
 
         assertFalse("Cannot move token out of home with a 1", validator.isValidMove(tokenInHome, 1, dummyState))
         assertFalse("Cannot move token out of home with a 5", validator.isValidMove(tokenInHome, 5, dummyState))
@@ -60,7 +79,7 @@ class LudoEngineTest {
     fun testMoveValidatorExactFinish() {
         val validator = MoveValidator()
         val tokenNearFinish = Token(id = 0, playerId = 0, state = TokenState.IN_HOME_COLUMN, positionIndex = 54)
-        val dummyState = GameState()
+        val dummyState = GameState(players = listOf(Player(id = 0, color = PlayerColor.RED, name = "Red", isAI = false, tokens = listOf(tokenNearFinish))))
 
         assertTrue("Roll 2 from index 54 reaches index 56 (finish)", validator.isValidMove(tokenNearFinish, 2, dummyState))
         assertTrue("Roll 1 from index 54 reaches index 55", validator.isValidMove(tokenNearFinish, 1, dummyState))
@@ -89,6 +108,24 @@ class LudoEngineTest {
         assertEquals("Must have 2 players", 2, state.players.size)
         assertEquals("Player 1 should be RED", PlayerColor.RED, state.players[0].color)
         assertEquals("Player 2 should be YELLOW (opposite)", PlayerColor.YELLOW, state.players[1].color)
+    }
+
+    @Test
+    fun testSnakeLadderEventStructure() {
+        val event = SnakeLadderEvent(
+            type = SnakeLadderType.LADDER,
+            playerId = 0,
+            tokenId = 1,
+            fromIndex = 4,
+            toIndex = 12,
+            fromBoardPos = Pair(6, 5),
+            toBoardPos = Pair(0, 8)
+        )
+        assertEquals(SnakeLadderType.LADDER, event.type)
+        assertEquals(0, event.playerId)
+        assertEquals(1, event.tokenId)
+        assertEquals(4, event.fromIndex)
+        assertEquals(12, event.toIndex)
     }
 
     @Test

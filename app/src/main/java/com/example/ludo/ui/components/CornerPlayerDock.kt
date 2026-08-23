@@ -3,7 +3,6 @@ package com.example.ludo.ui.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,118 +42,92 @@ fun CornerPlayerDock(
     modifier: Modifier = Modifier
 ) {
     if (player == null) {
-        // Empty slot placeholder
         Box(modifier = modifier.size(100.dp, 60.dp))
         return
     }
 
     val playerColor = getPlayerComposeColor(player.color)
-    val lightColor = getPlayerLightColor(player.color)
+    val playerLightColor = getPlayerLightColor(player.color)
 
     val infiniteTransition = rememberInfiniteTransition(label = "dockPulse")
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 0.98f,
-        targetValue = 1.04f,
+        targetValue = 1.03f,
         animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = FastOutSlowInEasing),
+            animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseScale"
     )
 
-    val haloAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.85f,
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(700, easing = FastOutSlowInEasing),
+            animation = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
-        label = "haloAlpha"
+        label = "glowAlpha"
     )
 
-    val isTop = corner == DockCorner.TOP_LEFT || corner == DockCorner.TOP_RIGHT
     val isLeft = corner == DockCorner.TOP_LEFT || corner == DockCorner.BOTTOM_LEFT
-
-    val tokensHome = player.tokens.count { it.state == TokenState.IN_HOME }
-    val tokensFinished = player.tokens.count { it.state == TokenState.FINISHED }
-    val tokensOnBoard = player.tokens.count { it.state == TokenState.ON_BOARD || it.state == TokenState.IN_HOME_COLUMN }
 
     Row(
         modifier = modifier
             .scale(if (isCurrentTurn) pulseScale else 1f)
-            .then(
-                if (isCurrentTurn) {
-                    Modifier.shadow(
-                        elevation = 10.dp,
-                        shape = RoundedCornerShape(16.dp),
-                        ambientColor = playerColor.copy(alpha = haloAlpha),
-                        spotColor = playerColor
-                    )
-                } else {
-                    Modifier.shadow(elevation = 2.dp, shape = RoundedCornerShape(16.dp))
-                }
+            .shadow(
+                elevation = if (isCurrentTurn) 8.dp else 2.dp,
+                shape = RoundedCornerShape(16.dp),
+                ambientColor = if (isCurrentTurn) playerColor.copy(alpha = 0.4f) else Color.Transparent,
+                spotColor = if (isCurrentTurn) playerColor else Color.Transparent
             )
             .clip(RoundedCornerShape(16.dp))
             .background(
-                if (isCurrentTurn) {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White,
-                            lightColor.copy(alpha = 0.35f)
-                        )
+                Brush.verticalGradient(
+                    colors = if (isCurrentTurn) listOf(
+                        Color.White,
+                        playerLightColor.copy(alpha = 0.35f)
+                    ) else listOf(
+                        Color.White,
+                        Color(0xFFF9F9F9)
                     )
-                } else {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White,
-                            Color(0xFFF7F7F7)
-                        )
-                    )
-                }
+                )
             )
-            .then(
-                if (isCurrentTurn) {
-                    Modifier.border(2.5.dp, playerColor, RoundedCornerShape(16.dp))
-                } else {
-                    Modifier.border(1.dp, Color(0xFFE0E0E0), RoundedCornerShape(16.dp))
-                }
+            .border(
+                width = if (isCurrentTurn) 2.dp else 1.dp,
+                color = if (isCurrentTurn) playerColor.copy(alpha = glowAlpha) else Color(0xFFE0E0E0),
+                shape = RoundedCornerShape(16.dp)
             )
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (isLeft) {
-            // Dice on the left, Avatar & details on the right
             DiceView(
                 diceValue = diceValue,
                 isRolling = isRolling,
                 enabled = isCurrentTurn && !player.isAI,
                 playerColor = playerColor,
+                showPromptBadge = true,
                 onClick = onDiceClick
             )
             PlayerInfoSection(
                 player = player,
                 playerColor = playerColor,
-                isCurrentTurn = isCurrentTurn,
-                tokensFinished = tokensFinished,
-                tokensOnBoard = tokensOnBoard,
-                tokensHome = tokensHome
+                isCurrentTurn = isCurrentTurn
             )
         } else {
-            // Avatar & details on the left, Dice on the right
             PlayerInfoSection(
                 player = player,
                 playerColor = playerColor,
-                isCurrentTurn = isCurrentTurn,
-                tokensFinished = tokensFinished,
-                tokensOnBoard = tokensOnBoard,
-                tokensHome = tokensHome
+                isCurrentTurn = isCurrentTurn
             )
             DiceView(
                 diceValue = diceValue,
                 isRolling = isRolling,
                 enabled = isCurrentTurn && !player.isAI,
                 playerColor = playerColor,
+                showPromptBadge = true,
                 onClick = onDiceClick
             )
         }
@@ -165,16 +138,12 @@ fun CornerPlayerDock(
 private fun PlayerInfoSection(
     player: Player,
     playerColor: Color,
-    isCurrentTurn: Boolean,
-    tokensFinished: Int,
-    tokensOnBoard: Int,
-    tokensHome: Int
+    isCurrentTurn: Boolean
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Avatar + Name
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -183,12 +152,12 @@ private fun PlayerInfoSection(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(CircleShape)
-                    .background(playerColor)
-                    .border(1.5.dp, Color.White, CircleShape),
+                    .background(playerColor.copy(alpha = 0.2f))
+                    .border(1.5.dp, playerColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (player.isAI) "🤖" else "👤",
+                    text = if (player.isAI) "\uD83E\uDD16" else "\uD83D\uDC64",
                     fontSize = 11.sp
                 )
             }
@@ -199,7 +168,7 @@ private fun PlayerInfoSection(
                 text = player.name,
                 fontSize = 12.sp,
                 fontWeight = if (isCurrentTurn) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (isCurrentTurn) playerColor else Color(0xFF333333),
+                color = if (isCurrentTurn) playerColor else Color(0xFF424242),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -207,7 +176,6 @@ private fun PlayerInfoSection(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Finished & Active token dots
         Row(
             horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -220,7 +188,7 @@ private fun PlayerInfoSection(
                                 .size(9.dp)
                                 .clip(CircleShape)
                                 .background(playerColor)
-                                .border(1.dp, Color.White, CircleShape)
+                                .border(1.dp, SafeZoneStar, CircleShape)
                         )
                     }
                     TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> {
@@ -237,7 +205,7 @@ private fun PlayerInfoSection(
                             modifier = Modifier
                                 .size(9.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFD4D4D4))
+                                .background(Color(0xFFBDBDBD))
                         )
                     }
                 }

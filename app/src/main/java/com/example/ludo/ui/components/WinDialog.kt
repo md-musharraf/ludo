@@ -2,6 +2,7 @@ package com.example.ludo.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -69,7 +70,6 @@ fun WinDialog(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Trophy
                 Text(
                     text = "🏆",
                     fontSize = 72.sp,
@@ -78,21 +78,20 @@ fun WinDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Title
                 Text(
                     text = "GAME OVER!",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Black,
-                    color = Color(0xFF333333)
+                    color = Color(0xFF3E2723)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Winner name with colored background
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(12.dp))
                         .background(winnerColor.copy(alpha = 0.15f))
+                        .border(1.dp, winnerColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                         .padding(horizontal = 20.dp, vertical = 8.dp)
                 ) {
                     Text(
@@ -106,7 +105,6 @@ fun WinDialog(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Buttons
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -116,7 +114,7 @@ fun WinDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Home", fontWeight = FontWeight.Medium)
+                        Text("Home", fontWeight = FontWeight.Medium, color = Color(0xFF757575))
                     }
 
                     Button(

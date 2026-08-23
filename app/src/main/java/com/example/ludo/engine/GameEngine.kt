@@ -21,7 +21,7 @@ class GameEngine {
 
     fun resetGame(playerCount: Int, isVsAI: Boolean, aiDifficulty: String = "Hard") {
         val selectedColors = when (playerCount) {
-            2 -> listOf(PlayerColor.RED, PlayerColor.YELLOW) // Opposite sides
+            2 -> listOf(PlayerColor.RED, PlayerColor.YELLOW)
             3 -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW)
             else -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE)
         }
@@ -56,7 +56,7 @@ class GameEngine {
             players = players,
             currentPlayerIndex = 0,
             gamePhase = GamePhase.WAITING_FOR_ROLL,
-            moveMessage = "${players[0].name}'s turn! Roll your corner dice 🎲"
+            moveMessage = "${players[0].name}'s turn! Roll your corner dice \uD83C\uDFB2"
         )
 
         aiPlayer = if (isVsAI) AIPlayer(this, aiDifficulty) else null
@@ -70,7 +70,6 @@ class GameEngine {
 
         val currentPlayer = currentState.players[currentState.currentPlayerIndex]
 
-        // Start tumbling animation on this specific player's corner dice
         _state.update {
             it.copy(
                 isDiceRollingForPlayer = currentPlayer.id,
@@ -81,7 +80,7 @@ class GameEngine {
         SoundEffectManager.playDiceRoll()
 
         engineScope.launch {
-            delay(500) // Realistic dice tumble duration
+            delay(550) // Realistic dice tumble duration
 
             val roll = (1..6).random()
             if (roll == 6) {
@@ -104,7 +103,7 @@ class GameEngine {
                         moveMessage = "Rolled a $roll. No valid moves!"
                     )
                 }
-                delay(1000)
+                delay(1100)
                 nextTurn()
             } else {
                 val consecutive = if (roll == 6) currentState.consecutiveSixes + 1 else 0
@@ -115,26 +114,53 @@ class GameEngine {
                             isDiceRollingForPlayer = null,
                             consecutiveSixes = 0,
                             validMoves = emptyList(),
-                            moveMessage = "Three 6s! Turn forfeited ⚠️"
+                            moveMessage = "Three 6s! Turn forfeited \u26A0\uFE0F"
                         )
                     }
-                    delay(1000)
+                    delay(1100)
                     nextTurn()
                 } else {
                     val extraRollText = if (roll == 6) " (Bonus roll on 6!)" else ""
-                    _state.update {
-                        it.copy(
-                            diceResult = DiceResult(roll),
-                            isDiceRollingForPlayer = null,
-                            validMoves = validMoves,
-                            consecutiveSixes = consecutive,
-                            gamePhase = GamePhase.WAITING_FOR_MOVE,
-                            moveMessage = "${currentPlayer.name} rolled a $roll! Tap a glowing piece$extraRollText"
-                        )
-                    }
 
-                    if (currentPlayer.isAI) {
-                        aiPlayer?.executeMove(validMoves)
+                    // AUTO-MOVE:
+                    // 1) If exactly 1 token can move -> auto move!
+                    // 2) If all valid options are in home (0 tokens on board) -> auto move first available home token!
+                    val isSingleChoice = validMoves.size == 1 ||
+                        (validMoves.isNotEmpty() && validMoves.all { id ->
+                            currentPlayer.tokens.firstOrNull { it.id == id }?.state == TokenState.IN_HOME
+                        })
+
+                    if (isSingleChoice) {
+                        val tokenToMove = validMoves.first()
+                        _state.update {
+                            it.copy(
+                                diceResult = DiceResult(roll),
+                                isDiceRollingForPlayer = null,
+                                validMoves = validMoves,
+                                consecutiveSixes = consecutive,
+                                gamePhase = GamePhase.WAITING_FOR_MOVE,
+                                isAutoMoving = true,
+                                moveMessage = "${currentPlayer.name} rolled $roll! Auto-moving...$extraRollText"
+                            )
+                        }
+                        delay(350) // Smooth pause to display dice number before auto-move
+                        selectToken(tokenToMove)
+                    } else {
+                        _state.update {
+                            it.copy(
+                                diceResult = DiceResult(roll),
+                                isDiceRollingForPlayer = null,
+                                validMoves = validMoves,
+                                consecutiveSixes = consecutive,
+                                gamePhase = GamePhase.WAITING_FOR_MOVE,
+                                isAutoMoving = false,
+                                moveMessage = "${currentPlayer.name} rolled a $roll! Tap a glowing piece$extraRollText"
+                            )
+                        }
+
+                        if (currentPlayer.isAI) {
+                            aiPlayer?.executeMove(validMoves)
+                        }
                     }
                 }
             }
@@ -161,6 +187,7 @@ class GameEngine {
                 animatingTokenId = tokenId,
                 animatingPlayerId = player.id,
                 validMoves = emptyList(),
+                isAutoMoving = false,
                 moveMessage = "${player.name} is moving piece ${tokenId + 1}..."
             )
         }
@@ -169,11 +196,9 @@ class GameEngine {
             val path = PathMapper.getPlayerPath(colorOrdinal)
 
             if (token.state == TokenState.IN_HOME) {
-                // Leaving home to start square
                 SoundEffectManager.playLeaveBase()
                 val targetBoardPos = path[0]
-                
-                // Parabolic step animation from home spot to start square
+
                 val homeSpot = BoardConfig.homePositions[colorOrdinal]?.get(token.id) ?: Pair(0,0)
                 animateHopFrames(player.id, tokenId, homeSpot, targetBoardPos)
 
@@ -183,10 +208,11 @@ class GameEngine {
                     boardPosition = targetBoardPos
                 )
                 updateToken(playerIndex, tokenIndex, updatedToken)
-                delay(200)
-                handlePostMove(playerIndex, updatedToken)
+                delay(120)
+
+                val afterSnakeLadder = checkSnakeLadder(playerIndex, tokenIndex, 0, path)
+                handlePostMove(playerIndex, afterSnakeLadder ?: updatedToken)
             } else {
-                // Step-by-step parabolic hop
                 var currentPos = token.positionIndex
                 for (step in 1..diceRoll) {
                     val fromPos = path[currentPos]
@@ -206,19 +232,112 @@ class GameEngine {
                     )
                     updateToken(playerIndex, tokenIndex, updatedToken)
                 }
+
                 val finalToken = _state.value.players[playerIndex].tokens[tokenIndex]
-                handlePostMove(playerIndex, finalToken)
+
+                if (finalToken.state == TokenState.ON_BOARD && currentPos < 51) {
+                    val afterSnakeLadder = checkSnakeLadder(playerIndex, tokenIndex, currentPos, path)
+                    handlePostMove(playerIndex, afterSnakeLadder ?: finalToken)
+                } else {
+                    handlePostMove(playerIndex, finalToken)
+                }
             }
         }
+    }
+
+    private suspend fun checkSnakeLadder(
+        playerIndex: Int,
+        tokenIndex: Int,
+        positionIndex: Int,
+        path: List<Pair<Int, Int>>
+    ): Token? {
+        val currentBoardPos = path.getOrNull(positionIndex) ?: return null
+        val player = _state.value.players[playerIndex]
+        val token = player.tokens[tokenIndex]
+
+        // Check if current position is on a Ladder base
+        val ladder = BoardConfig.ladders.firstOrNull { it.fromPos == currentBoardPos }
+        if (ladder != null) {
+            val targetIndex = (positionIndex + 8).coerceAtMost(56)
+            val targetBoardPos = path.getOrNull(targetIndex) ?: ladder.toPos
+
+            SoundEffectManager.playLadderClimb()
+
+            _state.update {
+                it.copy(
+                    lastSnakeLadderEvent = SnakeLadderEvent(
+                        type = SnakeLadderType.LADDER,
+                        playerId = player.id,
+                        tokenId = token.id,
+                        fromIndex = positionIndex,
+                        toIndex = targetIndex,
+                        fromBoardPos = currentBoardPos,
+                        toBoardPos = targetBoardPos
+                    ),
+                    moveMessage = "\uD83E\uDE9C LADDER BOOST! ${player.name} climbed to safety!"
+                )
+            }
+
+            delay(200)
+            animateHopFrames(player.id, token.id, currentBoardPos, targetBoardPos, frames = 12)
+
+            val newState = if (targetIndex >= 51) TokenState.IN_HOME_COLUMN else TokenState.ON_BOARD
+            val updatedToken = token.copy(
+                state = if (targetIndex == 56) TokenState.FINISHED else newState,
+                positionIndex = targetIndex,
+                boardPosition = targetBoardPos
+            )
+            updateToken(playerIndex, tokenIndex, updatedToken)
+            delay(300)
+            return updatedToken
+        }
+
+        // Check if current position is on a Snake head
+        val snake = BoardConfig.snakes.firstOrNull { it.fromPos == currentBoardPos }
+        if (snake != null) {
+            val targetIndex = (positionIndex - 8).coerceAtLeast(0)
+            val targetBoardPos = path.getOrNull(targetIndex) ?: snake.toPos
+
+            SoundEffectManager.playSnakeSlide()
+
+            _state.update {
+                it.copy(
+                    lastSnakeLadderEvent = SnakeLadderEvent(
+                        type = SnakeLadderType.SNAKE,
+                        playerId = player.id,
+                        tokenId = token.id,
+                        fromIndex = positionIndex,
+                        toIndex = targetIndex,
+                        fromBoardPos = currentBoardPos,
+                        toBoardPos = targetBoardPos
+                    ),
+                    moveMessage = "\uD83D\uDC0D SNAKE BITE! ${player.name} slithered down!"
+                )
+            }
+
+            delay(200)
+            animateHopFrames(player.id, token.id, currentBoardPos, targetBoardPos, frames = 12)
+
+            val updatedToken = token.copy(
+                state = TokenState.ON_BOARD,
+                positionIndex = targetIndex,
+                boardPosition = targetBoardPos
+            )
+            updateToken(playerIndex, tokenIndex, updatedToken)
+            delay(300)
+            return updatedToken
+        }
+
+        return null
     }
 
     private suspend fun animateHopFrames(
         playerId: Int,
         tokenId: Int,
         fromPos: Pair<Int, Int>,
-        toPos: Pair<Int, Int>
+        toPos: Pair<Int, Int>,
+        frames: Int = 8
     ) {
-        val frames = 5
         for (f in 1..frames) {
             val progress = f.toFloat() / frames.toFloat()
             _state.update {
@@ -230,7 +349,7 @@ class GameEngine {
                     animatingHopProgress = progress
                 )
             }
-            delay(32) // ~30fps smooth hop interpolation
+            delay(20) // ~50fps smooth hop
         }
         _state.update {
             it.copy(
@@ -263,7 +382,7 @@ class GameEngine {
 
         if (token.state == TokenState.FINISHED) {
             extraTurn = true
-            captureMessage = " 🎉 ${currentPlayer.name} reached HOME!"
+            captureMessage = " \uD83C\uDF89 ${currentPlayer.name} reached HOME!"
             SoundEffectManager.playSixRolled()
         }
 
@@ -284,8 +403,7 @@ class GameEngine {
                     if (oppToken.state == TokenState.ON_BOARD && oppToken.boardPosition == token.boardPosition) {
                         SoundEffectManager.playCapture()
                         val homeDest = BoardConfig.homePositions[oppColorOrdinal]?.get(oppToken.id) ?: Pair(0,0)
-                        
-                        // Set capture event for flyback animation
+
                         val captureEvent = CapturedTokenEvent(
                             playerId = opp.id,
                             tokenId = oppToken.id,
@@ -310,9 +428,9 @@ class GameEngine {
             }
 
             if (captured) {
-                captureMessage = " 💥 CAPTURED an opponent! Bonus turn!"
+                captureMessage = " \uD83D\uDCA5 CAPTURED an opponent! Bonus turn!"
                 _state.update { it.copy(players = players) }
-                delay(600) // Dramatic pause for flyback
+                delay(600)
             }
         }
 
@@ -320,7 +438,8 @@ class GameEngine {
             it.copy(
                 animatingTokenId = null,
                 animatingPlayerId = null,
-                lastCapturedEvent = null
+                lastCapturedEvent = null,
+                lastSnakeLadderEvent = null
             )
         }
 
@@ -334,7 +453,7 @@ class GameEngine {
                     gamePhase = GamePhase.WAITING_FOR_ROLL,
                     validMoves = emptyList(),
                     diceResult = null,
-                    moveMessage = "${currentPlayer.name} gets a bonus turn!$captureMessage Roll corner dice 🎲"
+                    moveMessage = "${currentPlayer.name} gets a bonus turn!$captureMessage Roll corner dice \uD83C\uDFB2"
                 )
             }
             checkAI()
@@ -365,7 +484,8 @@ class GameEngine {
                 isDiceRollingForPlayer = null,
                 animatingTokenId = null,
                 animatingPlayerId = null,
-                moveMessage = "${nextPlayer.name}'s turn! Roll your corner dice 🎲"
+                isAutoMoving = false,
+                moveMessage = "${nextPlayer.name}'s turn! Roll your corner dice \uD83C\uDFB2"
             )
         }
         checkAI()
@@ -381,7 +501,7 @@ class GameEngine {
                     gamePhase = GamePhase.GAME_OVER,
                     isGameOver = true,
                     winnerId = winner.id,
-                    moveMessage = "🏆 ${winner.name} WINS THE MATCH!"
+                    moveMessage = "\uD83C\uDFC6 ${winner.name} WINS THE MATCH!"
                 )
             }
         }

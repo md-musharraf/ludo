@@ -27,19 +27,6 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
     var isVsAI by remember { mutableStateOf(true) }
     var aiDifficulty by remember { mutableStateOf("Hard") }
 
-    // Animated background circles
-    val infiniteTransition = rememberInfiniteTransition(label = "bg")
-    val bgOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(20000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "bgRotation"
-    )
-
-    // Button press animation
     var startPressed by remember { mutableStateOf(false) }
     val startScale by animateFloatAsState(
         targetValue = if (startPressed) 0.95f else 1f,
@@ -54,22 +41,12 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                 Brush.verticalGradient(
                     colors = listOf(
                         Color(0xFFFFF8E1),
-                        Color(0xFFFFF3E0),
-                        Color(0xFFFFECB3)
+                        Color(0xFFFFECB3),
+                        Color(0xFFFFE082)
                     )
                 )
             )
     ) {
-        // Decorative background circles
-        val decorCircles = remember {
-            listOf(
-                Triple(0.1f, 0.15f, LudoRed.copy(alpha = 0.08f)),
-                Triple(0.85f, 0.1f, LudoGreen.copy(alpha = 0.08f)),
-                Triple(0.9f, 0.85f, LudoYellow.copy(alpha = 0.1f)),
-                Triple(0.15f, 0.9f, LudoBlue.copy(alpha = 0.08f)),
-            )
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -86,32 +63,34 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                 Text("O", color = LudoBlue, fontSize = 56.sp, fontWeight = FontWeight.Black)
             }
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             Text(
-                text = "Classic Board Game",
-                fontSize = 14.sp,
-                color = Color.Gray,
-                fontWeight = FontWeight.Medium
+                text = "SUPER LUDO MASTER",
+                fontSize = 13.sp,
+                color = Color(0xFF6D4C41),
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 4.sp
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(36.dp))
 
             // Settings card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Player count
                     Text(
                         text = "Number of Players",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
-                        color = Color(0xFF333333)
+                        color = Color(0xFF3E2723)
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -127,11 +106,11 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                                     .size(56.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        if (isSelected) LudoGreen else Color.Transparent
+                                        if (isSelected) LudoGreen.copy(alpha = 0.15f) else Color(0xFFF5F5F5)
                                     )
                                     .border(
                                         width = 2.dp,
-                                        color = if (isSelected) LudoGreen else Color.LightGray,
+                                        color = if (isSelected) LudoGreen else Color(0xFFE0E0E0),
                                         shape = CircleShape
                                     )
                                     .clickable { playerCount = count }
@@ -140,7 +119,7 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                                     text = "$count",
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color.White else Color.Gray
+                                    color = if (isSelected) LudoGreen else Color(0xFF757575)
                                 )
                             }
                         }
@@ -148,12 +127,11 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Game mode
                     Text(
                         text = "Game Mode",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 16.sp,
-                        color = Color(0xFF333333)
+                        color = Color(0xFF3E2723)
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -172,13 +150,12 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                         ModeButton(
                             text = "👥 Local",
                             isSelected = !isVsAI,
-                            color = LudoRed,
+                            color = LudoGreen,
                             onClick = { isVsAI = false },
                             modifier = Modifier.weight(1f)
                         )
                     }
 
-                    // AI Difficulty
                     if (isVsAI) {
                         Spacer(modifier = Modifier.height(20.dp))
 
@@ -186,7 +163,7 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                             text = "AI Difficulty",
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 16.sp,
-                            color = Color(0xFF333333)
+                            color = Color(0xFF3E2723)
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
@@ -221,20 +198,20 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                 onClick = { onStartGame(playerCount, isVsAI, aiDifficulty) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(60.dp)
+                    .height(58.dp)
                     .scale(startScale),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = LudoGreen
                 ),
                 elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 8.dp,
+                    defaultElevation = 6.dp,
                     pressedElevation = 2.dp
                 )
             ) {
                 Text(
                     text = "🎲  START GAME",
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
@@ -259,7 +236,7 @@ private fun ModeButton(
             .background(if (isSelected) color.copy(alpha = 0.15f) else Color(0xFFF5F5F5))
             .border(
                 width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) color else Color.LightGray,
+                color = if (isSelected) color else Color(0xFFE0E0E0),
                 shape = RoundedCornerShape(12.dp)
             )
             .clickable(onClick = onClick)
@@ -268,7 +245,7 @@ private fun ModeButton(
             text = text,
             fontSize = 14.sp,
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) color else Color.Gray,
+            color = if (isSelected) color else Color(0xFF757575),
             textAlign = TextAlign.Center
         )
     }

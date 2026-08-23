@@ -1,9 +1,5 @@
 package com.example.ludo.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -23,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.ludo.audio.SoundEffectManager
-import com.example.ludo.model.GamePhase
 import com.example.ludo.model.PlayerColor
 import com.example.ludo.theme.*
 import com.example.ludo.ui.components.*
@@ -43,11 +37,6 @@ fun GameScreen(
     var showRestartDialog by remember { mutableStateOf(false) }
     var soundEnabled by remember { mutableStateOf(SoundEffectManager.isSoundEnabled) }
 
-    // Map players to 4 corners
-    // Red -> TOP_LEFT (0)
-    // Green -> TOP_RIGHT (1)
-    // Yellow -> BOTTOM_RIGHT (2)
-    // Blue -> BOTTOM_LEFT (3)
     val redPlayer = gameState.players.firstOrNull { it.color == PlayerColor.RED }
     val greenPlayer = gameState.players.firstOrNull { it.color == PlayerColor.GREEN }
     val yellowPlayer = gameState.players.firstOrNull { it.color == PlayerColor.YELLOW }
@@ -68,9 +57,9 @@ fun GameScreen(
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFFFFF9E6),
-                        Color(0xFFFFF3D6),
-                        Color(0xFFFFECB3)
+                        Color(0xFFFFF8E1),
+                        Color(0xFFFFECB3),
+                        Color(0xFFFFE082)
                     )
                 )
             )
@@ -83,7 +72,7 @@ fun GameScreen(
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // ================= 1. TOP HEADER & CONTROLS =================
+            // 1. TOP HEADER
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -91,27 +80,24 @@ fun GameScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Home Button
                 IconButton(
                     onClick = onNavigateHome,
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
                         .background(Color.White)
-                        .shadow(2.dp, CircleShape)
+                        .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                 ) {
-                    Text("🏠", fontSize = 16.sp)
+                    Text("\uD83C\uDFE0", fontSize = 16.sp)
                 }
 
-                // Title Banner
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("L", color = LudoRed, fontSize = 20.sp, fontWeight = FontWeight.Black)
-                    Text("U", color = LudoGreen, fontSize = 20.sp, fontWeight = FontWeight.Black)
-                    Text("D", color = LudoYellow, fontSize = 20.sp, fontWeight = FontWeight.Black)
-                    Text("O", color = LudoBlue, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                    Text("L", color = LudoRed, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text("U", color = LudoGreen, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text("D", color = LudoYellow, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text("O", color = LudoBlue, fontSize = 22.sp, fontWeight = FontWeight.Black)
                 }
 
-                // Action Controls: Sound, Rules, Restart
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     IconButton(
                         onClick = {
@@ -122,9 +108,9 @@ fun GameScreen(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
-                            .shadow(2.dp, CircleShape)
+                            .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text(if (soundEnabled) "🔊" else "🔇", fontSize = 15.sp)
+                        Text(if (soundEnabled) "\uD83D\uDD0A" else "\uD83D\uDD07", fontSize = 15.sp)
                     }
 
                     IconButton(
@@ -133,9 +119,9 @@ fun GameScreen(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
-                            .shadow(2.dp, CircleShape)
+                            .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text("❓", fontSize = 15.sp)
+                        Text("\u2753", fontSize = 15.sp)
                     }
 
                     IconButton(
@@ -144,14 +130,14 @@ fun GameScreen(
                             .size(36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
-                            .shadow(2.dp, CircleShape)
+                            .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text("🔄", fontSize = 15.sp)
+                        Text("\uD83D\uDD04", fontSize = 15.sp)
                     }
                 }
             }
 
-            // ================= 2. TOP CORNER PLAYER DOCKS =================
+            // 2. TOP CORNER DOCKS
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -159,7 +145,6 @@ fun GameScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Top-Left Dock (RED)
                 CornerPlayerDock(
                     player = redPlayer,
                     isCurrentTurn = currentPlayer?.color == PlayerColor.RED,
@@ -176,7 +161,6 @@ fun GameScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Top-Right Dock (GREEN)
                 CornerPlayerDock(
                     player = greenPlayer,
                     isCurrentTurn = currentPlayer?.color == PlayerColor.GREEN,
@@ -192,7 +176,7 @@ fun GameScreen(
                 )
             }
 
-            // ================= 3. CENTER 15x15 BOARD CANVAS =================
+            // 3. CENTER BOARD
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -209,14 +193,14 @@ fun GameScreen(
                 )
             }
 
-            // ================= 4. LIVE GUIDANCE BANNER =================
+            // 4. LIVE GUIDANCE BANNER
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp, vertical = 2.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(currentPlayerColor.copy(alpha = 0.15f))
-                    .border(1.5.dp, currentPlayerColor.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .background(Color.White)
+                    .border(1.5.dp, currentPlayerColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -230,7 +214,7 @@ fun GameScreen(
                 )
             }
 
-            // ================= 5. BOTTOM CORNER PLAYER DOCKS =================
+            // 5. BOTTOM CORNER DOCKS
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -238,7 +222,6 @@ fun GameScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Bottom-Left Dock (BLUE)
                 CornerPlayerDock(
                     player = bluePlayer,
                     isCurrentTurn = currentPlayer?.color == PlayerColor.BLUE,
@@ -255,7 +238,6 @@ fun GameScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Bottom-Right Dock (YELLOW)
                 CornerPlayerDock(
                     player = yellowPlayer,
                     isCurrentTurn = currentPlayer?.color == PlayerColor.YELLOW,
@@ -272,7 +254,7 @@ fun GameScreen(
             }
         }
 
-        // Win Dialog & Confetti Celebration
+        // Win Dialog
         if (gameState.isGameOver) {
             val winner = gameState.players.firstOrNull { it.id == gameState.winnerId }
                 ?: gameState.players.firstOrNull { it.hasFinished }
@@ -284,17 +266,20 @@ fun GameScreen(
             )
         }
 
-        // Rules Dialog Modal
+        // Rules Dialog
         if (showRulesDialog) {
             RulesDialog(onDismiss = { showRulesDialog = false })
         }
 
-        // Restart Confirmation Modal
+        // Restart Dialog
         if (showRestartDialog) {
             AlertDialog(
                 onDismissRequest = { showRestartDialog = false },
+                containerColor = Color.White,
+                titleContentColor = Color(0xFF3E2723),
+                textContentColor = Color(0xFF616161),
                 title = { Text("Restart Match?", fontWeight = FontWeight.Bold) },
-                text = { Text("Are you sure you want to restart this Ludo match?") },
+                text = { Text("Are you sure you want to restart this match?") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -303,12 +288,14 @@ fun GameScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = LudoRed)
                     ) {
-                        Text("Restart")
+                        Text("Restart", color = Color.White)
                     }
                 },
                 dismissButton = {
-                    OutlinedButton(onClick = { showRestartDialog = false }) {
-                        Text("Cancel")
+                    OutlinedButton(
+                        onClick = { showRestartDialog = false }
+                    ) {
+                        Text("Cancel", color = Color(0xFF616161))
                     }
                 }
             )
@@ -322,24 +309,26 @@ private fun RulesDialog(onDismiss: () -> Unit) {
         Card(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("📜 Ludo Rules", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF212121))
+                Text("\uD83D\uDCDC Game Rules", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color(0xFF3E2723))
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RuleItem("🎲", "Each player has their own corner dice dock. Tap your personal dice to roll.")
-                    RuleItem("🚪", "Roll a 6 to move a piece out of your home base to the track.")
-                    RuleItem("🔄", "Rolling a 6 grants you a bonus turn!")
-                    RuleItem("⚠️", "Three consecutive 6s forfeits your turn.")
-                    RuleItem("💥", "Landing on an opponent sends their piece flying back home + grants an extra turn!")
-                    RuleItem("⭐", "Star positions and colored start squares are Safe Zones.")
-                    RuleItem("🏠", "Guide all 4 pieces into the center Home triangle to win!")
+                    RuleItem("\uD83C\uDFB2", "Tap your corner dice to roll. Each player has their own dice.")
+                    RuleItem("\uD83D\uDEAA", "Roll a 6 to move a piece out of home base.")
+                    RuleItem("\uD83D\uDD04", "Rolling 6 grants a bonus turn. Three 6s forfeits turn.")
+                    RuleItem("\uD83D\uDCA5", "Land on an opponent to capture them + get bonus turn!")
+                    RuleItem("\u2B50", "Stars and start squares are Safe Zones.")
+                    RuleItem("\uD83D\uDC0D", "Snakes slide you backward on the track!")
+                    RuleItem("\uD83E\uDE9C", "Ladders boost you forward on the track!")
+                    RuleItem("\u2699\uFE0F", "Auto-move triggers when only 1 piece can move.")
+                    RuleItem("\uD83C\uDFE0", "Guide all 4 pieces to center Home to win!")
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
@@ -349,7 +338,7 @@ private fun RulesDialog(onDismiss: () -> Unit) {
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = LudoGreen)
                 ) {
-                    Text("Got It!")
+                    Text("Got It!", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -360,6 +349,6 @@ private fun RulesDialog(onDismiss: () -> Unit) {
 private fun RuleItem(icon: String, text: String) {
     Row(verticalAlignment = Alignment.Top) {
         Text(icon, fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
-        Text(text, fontSize = 13.sp, color = Color(0xFF424242), lineHeight = 18.sp)
+        Text(text, fontSize = 13.sp, color = Color(0xFF616161), lineHeight = 18.sp)
     }
 }

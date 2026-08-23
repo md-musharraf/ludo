@@ -1,11 +1,16 @@
 package com.example.ludo.engine
 
+data class BoardPortal(
+    val fromTrackIndex: Int,
+    val toTrackIndex: Int,
+    val fromPos: Pair<Int, Int>,
+    val toPos: Pair<Int, Int>
+)
+
 object BoardConfig {
-    // 15x15 board (0 to 14 indices)
     val BOARD_SIZE = 15
 
-    // The 52 main track positions in clockwise order, starting from Red's start
-    // Red starts at (6, 1) -> index 0
+    // 52 main track cells in clockwise order
     val mainTrack = listOf(
         Pair(6,1), Pair(6,2), Pair(6,3), Pair(6,4), Pair(6,5),
         Pair(5,6), Pair(4,6), Pair(3,6), Pair(2,6), Pair(1,6), Pair(0,6),
@@ -21,13 +26,11 @@ object BoardConfig {
         Pair(7,0), Pair(6,0)
     )
 
-    // Player start indices on the main track
     val RED_START_INDEX = 0
     val GREEN_START_INDEX = 13
     val YELLOW_START_INDEX = 26
     val BLUE_START_INDEX = 39
 
-    // Home columns (indices 51 to 56 for each player's local path)
     val redHomeColumn = listOf(Pair(7,1), Pair(7,2), Pair(7,3), Pair(7,4), Pair(7,5), Pair(7,6))
     val greenHomeColumn = listOf(Pair(1,7), Pair(2,7), Pair(3,7), Pair(4,7), Pair(5,7), Pair(6,7))
     val yellowHomeColumn = listOf(Pair(7,13), Pair(7,12), Pair(7,11), Pair(7,10), Pair(7,9), Pair(7,8))
@@ -37,9 +40,25 @@ object BoardConfig {
     val safePositions = safeSpotsIndices.map { mainTrack[it] }
 
     val homePositions = mapOf(
-        0 to listOf(Pair(2,2), Pair(2,3), Pair(3,2), Pair(3,3)), // Red
-        1 to listOf(Pair(2,11), Pair(2,12), Pair(3,11), Pair(3,12)), // Green
-        2 to listOf(Pair(11,11), Pair(11,12), Pair(12,11), Pair(12,12)), // Yellow
-        3 to listOf(Pair(11,2), Pair(11,3), Pair(12,2), Pair(12,3)) // Blue
+        0 to listOf(Pair(2,2), Pair(2,3), Pair(3,2), Pair(3,3)),
+        1 to listOf(Pair(2,11), Pair(2,12), Pair(3,11), Pair(3,12)),
+        2 to listOf(Pair(11,11), Pair(11,12), Pair(12,11), Pair(12,12)),
+        3 to listOf(Pair(11,2), Pair(11,3), Pair(12,2), Pair(12,3))
+    )
+
+    // 4 Symmetrical Ladders (Base -> Top, +8 track step boost)
+    val ladders: List<BoardPortal> = listOf(
+        BoardPortal(4, 12, mainTrack[4], mainTrack[12]),
+        BoardPortal(17, 25, mainTrack[17], mainTrack[25]),
+        BoardPortal(30, 38, mainTrack[30], mainTrack[38]),
+        BoardPortal(43, 51, mainTrack[43], mainTrack[51])
+    )
+
+    // 4 Symmetrical Snakes (Head -> Tail, -8 track step drop)
+    val snakes: List<BoardPortal> = listOf(
+        BoardPortal(11, 3, mainTrack[11], mainTrack[3]),
+        BoardPortal(24, 16, mainTrack[24], mainTrack[16]),
+        BoardPortal(37, 29, mainTrack[37], mainTrack[29]),
+        BoardPortal(50, 42, mainTrack[50], mainTrack[42])
     )
 }

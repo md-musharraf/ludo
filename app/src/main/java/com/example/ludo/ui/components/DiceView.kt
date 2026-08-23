@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -34,50 +35,57 @@ fun DiceView(
     showPromptBadge: Boolean = false,
     onClick: () -> Unit
 ) {
-    // 1. Continuous rotation during roll
     val infiniteTransition = rememberInfiniteTransition(label = "diceAnim")
+
     val rollingRotation by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = 720f,
         animationSpec = infiniteRepeatable(
-            animation = tween(320, easing = LinearEasing),
+            animation = tween(600, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "rollingRotation"
     )
 
-    // 2. Pulse for waiting to roll
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.95f,
+    val rollingScale by infiniteTransition.animateFloat(
+        initialValue = 0.88f,
+        targetValue = 1.12f,
         animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
+            animation = tween(150, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "rollingScale"
+    )
+
+    val glowAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(700, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glowAlpha"
     )
 
     val promptScale by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
+        initialValue = 0.92f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
+            animation = tween(600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "promptScale"
     )
 
-    // 3. Bounce on landing
     val landingScale by animateFloatAsState(
-        targetValue = if (isRolling) 1.15f else if (enabled) 1.04f else 1f,
+        targetValue = if (isRolling) 1f else if (enabled) 1.04f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
+            stiffness = Spring.StiffnessLow
         ),
         label = "landingScale"
     )
 
-    // Cycle numbers rapidly during roll
     var displayedNumber by remember { mutableIntStateOf(diceValue) }
     LaunchedEffect(isRolling) {
         if (isRolling) {
@@ -94,18 +102,17 @@ fun DiceView(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Optional prompt badge
         if (showPromptBadge && enabled && !isRolling) {
             Box(
                 modifier = Modifier
                     .scale(promptScale)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(playerColor.copy(alpha = 0.18f))
+                    .background(playerColor.copy(alpha = 0.15f))
                     .border(1.dp, playerColor.copy(alpha = glowAlpha), RoundedCornerShape(8.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "ROLL 🎲",
+                    text = "ROLL \uD83C\uDFB2",
                     color = playerColor,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold
@@ -114,55 +121,43 @@ fun DiceView(
             Spacer(modifier = Modifier.height(3.dp))
         }
 
-        // Dice Box
+        // Classic White 3D Dice Box
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(size)
-                .scale(landingScale)
+                .scale(if (isRolling) rollingScale * landingScale else landingScale)
                 .rotate(if (isRolling) rollingRotation else 0f)
-                .then(
-                    if (enabled) {
-                        Modifier.shadow(
-                            elevation = 10.dp,
-                            shape = RoundedCornerShape(14.dp),
-                            ambientColor = playerColor.copy(alpha = glowAlpha),
-                            spotColor = playerColor
-                        )
-                    } else {
-                        Modifier.shadow(elevation = 2.dp, shape = RoundedCornerShape(14.dp))
-                    }
+                .shadow(
+                    elevation = if (enabled) 10.dp else 3.dp,
+                    shape = RoundedCornerShape(14.dp),
+                    ambientColor = if (enabled) playerColor.copy(alpha = 0.4f) else Color(0x33000000),
+                    spotColor = if (enabled) playerColor else Color(0x44000000)
                 )
                 .clip(RoundedCornerShape(14.dp))
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
                             Color.White,
-                            Color(0xFFF8F8F8),
-                            Color(0xFFEBEBEB)
+                            Color(0xFFF5F5F5),
+                            Color(0xFFEEEEEE)
                         )
                     )
                 )
-                .then(
-                    if (enabled) {
-                        Modifier.border(
-                            width = 2.dp,
-                            color = playerColor.copy(alpha = glowAlpha),
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                    } else {
-                        Modifier.border(
-                            width = 1.dp,
-                            color = Color(0xFFD6D6D6),
-                            shape = RoundedCornerShape(14.dp)
-                        )
-                    }
+                .border(
+                    width = if (enabled) 2.5.dp else 1.dp,
+                    color = if (enabled) playerColor.copy(alpha = glowAlpha) else Color(0xFFE0E0E0),
+                    shape = RoundedCornerShape(14.dp)
                 )
-                .clickable(enabled = enabled, onClick = onClick)
+                .clickable(
+                    enabled = enabled,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
+                )
         ) {
-            // Dice Canvas Drawing Pips
-            Canvas(modifier = Modifier.size(size * 0.75f)) {
-                val dotRadius = this.size.width * 0.09f
+            Canvas(modifier = Modifier.size(size * 0.76f)) {
+                val dotRadius = this.size.width * 0.10f
                 val margin = this.size.width * 0.22f
                 val center = Offset(this.size.width / 2, this.size.height / 2)
                 val topLeft = Offset(margin, margin)
@@ -172,22 +167,22 @@ fun DiceView(
                 val bottomLeft = Offset(margin, this.size.height - margin)
                 val bottomRight = Offset(this.size.width - margin, this.size.height - margin)
 
-                val pipColor = if (displayedNumber == 6) LudoRed else Color(0xFF222222)
+                val pipColor = if (displayedNumber == 6) LudoRed else Color(0xFF212121)
 
                 fun drawPip(pos: Offset) {
                     // Pip shadow
                     drawCircle(
-                        color = Color(0x30000000),
-                        radius = dotRadius,
-                        center = Offset(pos.x + 1f, pos.y + 1f)
+                        color = Color(0x22000000),
+                        radius = dotRadius * 1.15f,
+                        center = Offset(pos.x + 0.8f, pos.y + 0.8f)
                     )
-                    // Pip fill
+                    // Pip body
                     drawCircle(color = pipColor, radius = dotRadius, center = pos)
-                    // Pip highlight
+                    // Pip gloss highlight
                     drawCircle(
                         color = Color.White.copy(alpha = 0.5f),
-                        radius = dotRadius * 0.4f,
-                        center = Offset(pos.x - dotRadius * 0.3f, pos.y - dotRadius * 0.3f)
+                        radius = dotRadius * 0.35f,
+                        center = Offset(pos.x - dotRadius * 0.25f, pos.y - dotRadius * 0.25f)
                     )
                 }
 

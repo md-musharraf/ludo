@@ -15,7 +15,7 @@ class AIPlayer(private val engine: GameEngine, private val difficulty: String) {
 
     suspend fun executeMove(validMoves: List<Int>) {
         if (validMoves.isEmpty()) return
-        delay(700)
+        delay(650)
         val chosenMove = chooseBestMove(validMoves)
         engine.selectToken(chosenMove)
     }
@@ -26,15 +26,12 @@ class AIPlayer(private val engine: GameEngine, private val difficulty: String) {
             return validMoves.random()
         }
 
-        // Smart / Hard AI strategy
         val state = engine.state.value
         val currentPlayer = state.players[state.currentPlayerIndex]
         val diceVal = state.diceResult?.value ?: 1
-
         val path = PathMapper.getPlayerPath(currentPlayer.id)
 
-        // Evaluate each possible move
-        var bestScore = -1000
+        var bestScore = -10000
         var bestTokenId = validMoves.first()
 
         for (tokenId in validMoves) {
@@ -42,41 +39,52 @@ class AIPlayer(private val engine: GameEngine, private val difficulty: String) {
             var score = 0
 
             if (token.state == TokenState.IN_HOME) {
-                // Leaving home is very valuable
-                score += 80
+                score += 85 // Deploying a new token
             } else {
                 val targetIndex = token.positionIndex + diceVal
                 if (targetIndex >= 0 && targetIndex < path.size) {
                     val targetBoardPos = path[targetIndex]
 
-                    // Check if move lands on FINISHED (index 56)
+                    // Finishing token
                     if (targetIndex == 56) {
-                        score += 150 // Finishing a token is top priority!
+                        score += 300
                     }
 
-                    // Check if move reaches home column (safe from capture)
+                    // Reaching safe home column
                     if (targetIndex >= 51 && token.positionIndex < 51) {
-                        score += 70
+                        score += 90
                     }
 
-                    // Check if move captures an opponent
+                    // Ladder bonus!
+                    val isLadder = BoardConfig.ladders.any { it.fromPos == targetBoardPos }
+                    if (isLadder) {
+                        score += 130
+                    }
+
+                    // Snake penalty!
+                    val isSnake = BoardConfig.snakes.any { it.fromPos == targetBoardPos }
+                    if (isSnake) {
+                        score -= 110
+                    }
+
+                    // Capturing opponent
                     if (!BoardConfig.safePositions.contains(targetBoardPos)) {
                         for (otherPlayer in state.players) {
                             if (otherPlayer.id == currentPlayer.id) continue
                             for (oppToken in otherPlayer.tokens) {
                                 if (oppToken.state == TokenState.ON_BOARD && oppToken.boardPosition == targetBoardPos) {
-                                    score += 120 // Huge reward for capturing!
+                                    score += 150 // Massive reward for capturing!
                                 }
                             }
                         }
                     }
 
-                    // Check if target is a safe spot
+                    // Safe spot reward
                     if (BoardConfig.safePositions.contains(targetBoardPos)) {
-                        score += 40
+                        score += 45
                     }
 
-                    // Prefer advancing tokens that are further ahead
+                    // Progress reward
                     score += targetIndex
                 }
             }

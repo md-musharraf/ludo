@@ -8,23 +8,38 @@ data class CapturedTokenEvent(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+data class SnakeLadderEvent(
+    val type: SnakeLadderType,
+    val playerId: Int,
+    val tokenId: Int,
+    val fromIndex: Int,
+    val toIndex: Int,
+    val fromBoardPos: Pair<Int, Int>,
+    val toBoardPos: Pair<Int, Int>,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
+enum class SnakeLadderType { SNAKE, LADDER }
+
 data class GameState(
     val players: List<Player> = emptyList(),
     val currentPlayerIndex: Int = 0,
     val gamePhase: GamePhase = GamePhase.WAITING_FOR_ROLL,
     val diceResult: DiceResult? = null,
-    val validMoves: List<Int> = emptyList(), // List of token IDs that can move
+    val validMoves: List<Int> = emptyList(),
     val consecutiveSixes: Int = 0,
     val isGameOver: Boolean = false,
     val winnerId: Int? = null,
     val moveMessage: String = "",
-    val isDiceRollingForPlayer: Int? = null, // player id whose corner dice is currently rolling
+    val isDiceRollingForPlayer: Int? = null,
     val animatingTokenId: Int? = null,
     val animatingPlayerId: Int? = null,
     val animatingFromPos: Pair<Int, Int>? = null,
     val animatingToPos: Pair<Int, Int>? = null,
-    val animatingHopProgress: Float = 0f, // 0.0 to 1.0 for parabolic arc
-    val lastCapturedEvent: CapturedTokenEvent? = null
+    val animatingHopProgress: Float = 0f,
+    val lastCapturedEvent: CapturedTokenEvent? = null,
+    val lastSnakeLadderEvent: SnakeLadderEvent? = null,
+    val isAutoMoving: Boolean = false
 )
 
 enum class GamePhase {

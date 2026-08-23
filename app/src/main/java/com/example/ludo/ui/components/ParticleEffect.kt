@@ -22,15 +22,18 @@ data class Particle(
 @Composable
 fun ParticleEffect(modifier: Modifier = Modifier) {
     val particles = remember {
-        val colors = listOf(LudoRed, LudoGreen, LudoYellow, LudoBlue, Color.White, SafeZoneStar)
-        List(80) {
+        val colors = listOf(
+            LudoRed, LudoGreen, LudoYellow, LudoBlue,
+            SafeZoneStar, Color.White
+        )
+        List(90) {
             Particle(
                 x = Random.nextFloat(),
                 y = Random.nextFloat() * 0.3f,
-                vx = (Random.nextFloat() - 0.5f) * 0.01f,
-                vy = Random.nextFloat() * 0.005f + 0.002f,
+                vx = (Random.nextFloat() - 0.5f) * 0.012f,
+                vy = Random.nextFloat() * 0.006f + 0.002f,
                 color = colors.random(),
-                alpha = Random.nextFloat() * 0.5f + 0.5f,
+                alpha = Random.nextFloat() * 0.6f + 0.4f,
                 size = Random.nextFloat() * 8f + 3f
             )
         }

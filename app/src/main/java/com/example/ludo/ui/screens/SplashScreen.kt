@@ -1,7 +1,6 @@
 package com.example.ludo.ui.screens
 
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -15,7 +14,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +28,6 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
     val infiniteTransition = rememberInfiniteTransition(label = "splash")
 
-    // Dice rotation and bobbing
     val diceRotation by infiniteTransition.animateFloat(
         initialValue = -12f,
         targetValue = 12f,
@@ -83,7 +80,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Animated 4-Color Dice Emblem
+            // 4-Quadrant Colored Emblem
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -95,7 +92,6 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                     .background(Color.White)
                     .border(3.dp, Color(0xFFE0E0E0), RoundedCornerShape(32.dp))
             ) {
-                // 4 Quadrants inside emblem
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(modifier = Modifier.weight(1f)) {
                         Box(modifier = Modifier.weight(1f).fillMaxHeight().background(LudoRed))
@@ -107,7 +103,6 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                     }
                 }
 
-                // Center Gold Token Emblem
                 Box(
                     modifier = Modifier
                         .size(54.dp)
@@ -122,7 +117,6 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
             Spacer(modifier = Modifier.height(36.dp))
 
-            // Animated Letters: L - U - D - O
             Row(
                 modifier = Modifier.scale(titleScale),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
