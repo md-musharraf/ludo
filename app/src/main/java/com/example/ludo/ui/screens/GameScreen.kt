@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -44,6 +43,16 @@ fun GameScreen(
     var showRestartDialog by remember { mutableStateOf(false) }
     var soundEnabled by remember { mutableStateOf(SoundEffectManager.isSoundEnabled) }
 
+    // Map players to 4 corners
+    // Red -> TOP_LEFT (0)
+    // Green -> TOP_RIGHT (1)
+    // Yellow -> BOTTOM_RIGHT (2)
+    // Blue -> BOTTOM_LEFT (3)
+    val redPlayer = gameState.players.firstOrNull { it.color == PlayerColor.RED }
+    val greenPlayer = gameState.players.firstOrNull { it.color == PlayerColor.GREEN }
+    val yellowPlayer = gameState.players.firstOrNull { it.color == PlayerColor.YELLOW }
+    val bluePlayer = gameState.players.firstOrNull { it.color == PlayerColor.BLUE }
+
     val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex)
     val currentPlayerColor = when (currentPlayer?.color) {
         PlayerColor.RED -> LudoRed
@@ -68,14 +77,17 @@ fun GameScreen(
             .safeDrawingPadding()
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Top Bar with Controls
+            // ================= 1. TOP HEADER & CONTROLS =================
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -83,101 +95,109 @@ fun GameScreen(
                 IconButton(
                     onClick = onNavigateHome,
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
                         .background(Color.White)
                         .shadow(2.dp, CircleShape)
                 ) {
-                    Text("🏠", fontSize = 18.sp)
+                    Text("🏠", fontSize = 16.sp)
                 }
 
-                // Title
+                // Title Banner
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("L", color = LudoRed, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Text("U", color = LudoGreen, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Text("D", color = LudoYellow, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Text("O", color = LudoBlue, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text("L", color = LudoRed, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                    Text("U", color = LudoGreen, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                    Text("D", color = LudoYellow, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                    Text("O", color = LudoBlue, fontSize = 20.sp, fontWeight = FontWeight.Black)
                 }
 
-                // Action Buttons: Sound, Rules, Restart
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // Sound Toggle
+                // Action Controls: Sound, Rules, Restart
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     IconButton(
                         onClick = {
                             soundEnabled = !soundEnabled
                             SoundEffectManager.isSoundEnabled = soundEnabled
                         },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .shadow(2.dp, CircleShape)
                     ) {
-                        Text(if (soundEnabled) "🔊" else "🔇", fontSize = 16.sp)
+                        Text(if (soundEnabled) "🔊" else "🔇", fontSize = 15.sp)
                     }
 
-                    // Rules Button
                     IconButton(
                         onClick = { showRulesDialog = true },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .shadow(2.dp, CircleShape)
                     ) {
-                        Text("❓", fontSize = 16.sp)
+                        Text("❓", fontSize = 15.sp)
                     }
 
-                    // Restart Button
                     IconButton(
                         onClick = { showRestartDialog = true },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .shadow(2.dp, CircleShape)
                     ) {
-                        Text("🔄", fontSize = 16.sp)
+                        Text("🔄", fontSize = 15.sp)
                     }
                 }
             }
 
-            // 2. Player Status Panel
-            PlayerPanel(
-                players = gameState.players,
-                currentPlayerIndex = gameState.currentPlayerIndex,
+            // ================= 2. TOP CORNER PLAYER DOCKS =================
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-
-            // 3. Turn Status Banner
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 4.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(currentPlayerColor.copy(alpha = 0.15f))
-                    .border(1.5.dp, currentPlayerColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = gameState.moveMessage.ifEmpty { "${currentPlayer?.name ?: "Player"}'s turn" },
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = currentPlayerColor,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1
+                // Top-Left Dock (RED)
+                CornerPlayerDock(
+                    player = redPlayer,
+                    isCurrentTurn = currentPlayer?.color == PlayerColor.RED,
+                    isRolling = gameState.isDiceRollingForPlayer == redPlayer?.id,
+                    diceValue = gameState.diceResult?.value ?: 1,
+                    corner = DockCorner.TOP_LEFT,
+                    onDiceClick = {
+                        if (currentPlayer?.color == PlayerColor.RED) {
+                            viewModel.rollDice()
+                        }
+                    },
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Top-Right Dock (GREEN)
+                CornerPlayerDock(
+                    player = greenPlayer,
+                    isCurrentTurn = currentPlayer?.color == PlayerColor.GREEN,
+                    isRolling = gameState.isDiceRollingForPlayer == greenPlayer?.id,
+                    diceValue = gameState.diceResult?.value ?: 1,
+                    corner = DockCorner.TOP_RIGHT,
+                    onDiceClick = {
+                        if (currentPlayer?.color == PlayerColor.GREEN) {
+                            viewModel.rollDice()
+                        }
+                    },
+                    modifier = Modifier.weight(1f, fill = false)
                 )
             }
 
-            // 4. Main 15x15 Ludo Board Canvas
+            // ================= 3. CENTER 15x15 BOARD CANVAS =================
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .aspectRatio(1f)
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                    .padding(vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 LudoBoard(
@@ -189,26 +209,70 @@ fun GameScreen(
                 )
             }
 
-            // 5. Bottom Dice Controls Area
+            // ================= 4. LIVE GUIDANCE BANNER =================
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(currentPlayerColor.copy(alpha = 0.15f))
+                    .border(1.5.dp, currentPlayerColor.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = gameState.moveMessage.ifEmpty { "${currentPlayer?.name ?: "Player"}'s turn" },
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = currentPlayerColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
+                )
+            }
+
+            // ================= 5. BOTTOM CORNER PLAYER DOCKS =================
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.Center,
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DiceView(
+                // Bottom-Left Dock (BLUE)
+                CornerPlayerDock(
+                    player = bluePlayer,
+                    isCurrentTurn = currentPlayer?.color == PlayerColor.BLUE,
+                    isRolling = gameState.isDiceRollingForPlayer == bluePlayer?.id,
                     diceValue = gameState.diceResult?.value ?: 1,
-                    isRolling = gameState.gamePhase == GamePhase.ANIMATING_MOVE,
-                    enabled = gameState.gamePhase == GamePhase.WAITING_FOR_ROLL &&
-                            !(currentPlayer?.isAI ?: false) && !gameState.isGameOver,
-                    playerColor = currentPlayerColor,
-                    onClick = { viewModel.rollDice() }
+                    corner = DockCorner.BOTTOM_LEFT,
+                    onDiceClick = {
+                        if (currentPlayer?.color == PlayerColor.BLUE) {
+                            viewModel.rollDice()
+                        }
+                    },
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Bottom-Right Dock (YELLOW)
+                CornerPlayerDock(
+                    player = yellowPlayer,
+                    isCurrentTurn = currentPlayer?.color == PlayerColor.YELLOW,
+                    isRolling = gameState.isDiceRollingForPlayer == yellowPlayer?.id,
+                    diceValue = gameState.diceResult?.value ?: 1,
+                    corner = DockCorner.BOTTOM_RIGHT,
+                    onDiceClick = {
+                        if (currentPlayer?.color == PlayerColor.YELLOW) {
+                            viewModel.rollDice()
+                        }
+                    },
+                    modifier = Modifier.weight(1f, fill = false)
                 )
             }
         }
 
-        // Win Dialog & Confetti Overlay
+        // Win Dialog & Confetti Celebration
         if (gameState.isGameOver) {
             val winner = gameState.players.firstOrNull { it.id == gameState.winnerId }
                 ?: gameState.players.firstOrNull { it.hasFinished }
@@ -229,8 +293,8 @@ fun GameScreen(
         if (showRestartDialog) {
             AlertDialog(
                 onDismissRequest = { showRestartDialog = false },
-                title = { Text("Restart Game?", fontWeight = FontWeight.Bold) },
-                text = { Text("Are you sure you want to restart this match?") },
+                title = { Text("Restart Match?", fontWeight = FontWeight.Bold) },
+                text = { Text("Are you sure you want to restart this Ludo match?") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -269,12 +333,13 @@ private fun RulesDialog(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RuleItem("🎲", "Roll a 6 to move a piece out of your home base.")
-                    RuleItem("🔄", "Rolling a 6 grants you an extra turn!")
+                    RuleItem("🎲", "Each player has their own corner dice dock. Tap your personal dice to roll.")
+                    RuleItem("🚪", "Roll a 6 to move a piece out of your home base to the track.")
+                    RuleItem("🔄", "Rolling a 6 grants you a bonus turn!")
                     RuleItem("⚠️", "Three consecutive 6s forfeits your turn.")
-                    RuleItem("💥", "Landing on an opponent's piece sends it back home and gives an extra turn!")
+                    RuleItem("💥", "Landing on an opponent sends their piece flying back home + grants an extra turn!")
                     RuleItem("⭐", "Star positions and colored start squares are Safe Zones.")
-                    RuleItem("🏠", "Guide all 4 pieces around the board into the center Home to win!")
+                    RuleItem("🏠", "Guide all 4 pieces into the center Home triangle to win!")
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))

@@ -90,4 +90,18 @@ class LudoEngineTest {
         assertEquals("Player 1 should be RED", PlayerColor.RED, state.players[0].color)
         assertEquals("Player 2 should be YELLOW (opposite)", PlayerColor.YELLOW, state.players[1].color)
     }
+
+    @Test
+    fun testCapturedTokenEventStructure() {
+        val event = CapturedTokenEvent(
+            playerId = 1,
+            tokenId = 2,
+            fromPosition = Pair(6, 1),
+            toHomePosition = Pair(2, 11)
+        )
+        assertEquals(1, event.playerId)
+        assertEquals(2, event.tokenId)
+        assertEquals(Pair(6, 1), event.fromPosition)
+        assertEquals(Pair(2, 11), event.toHomePosition)
+    }
 }
