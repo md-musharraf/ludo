@@ -141,4 +141,20 @@ class LudoEngineTest {
         assertEquals(Pair(6, 1), event.fromPosition)
         assertEquals(Pair(2, 11), event.toHomePosition)
     }
+
+    @Test
+    fun testValidMovesForSixInHome() {
+        val validator = MoveValidator()
+        val tokens = List(4) { id -> Token(id = id, playerId = 0, state = TokenState.IN_HOME) }
+        val player = Player(id = 0, color = PlayerColor.RED, name = "Player 1", isAI = false, tokens = tokens)
+        val stateWithSix = GameState(
+            players = listOf(player),
+            currentPlayerIndex = 0,
+            diceResult = DiceResult(6),
+            gamePhase = GamePhase.WAITING_FOR_MOVE
+        )
+        val valid = validator.getValidMoves(stateWithSix)
+        assertEquals("All 4 home tokens are valid when rolling a 6", 4, valid.size)
+        assertTrue(valid.containsAll(listOf(0, 1, 2, 3)))
+    }
 }

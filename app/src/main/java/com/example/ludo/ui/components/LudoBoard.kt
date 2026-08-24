@@ -81,7 +81,7 @@ fun LudoBoard(
                     if (info.playerId == currentPlayer.id && info.isValid) {
                         val dx = tapOffset.x - info.center.x
                         val dy = tapOffset.y - info.center.y
-                        val hitDistance = info.radius * 1.6f
+                        val hitDistance = info.radius * 2.1f
                         if (dx * dx + dy * dy <= hitDistance * hitDistance) {
                             onTokenClick(info.tokenId)
                             return@detectTapGestures
@@ -589,9 +589,15 @@ private fun DrawScope.drawLudoToken(
 
     if (isValid) {
         drawCircle(
-            color = color.copy(alpha = pulseAlpha * 0.5f),
-            radius = radius * pulseScale * 1.4f,
+            color = color.copy(alpha = pulseAlpha * 0.55f),
+            radius = radius * pulseScale * 1.55f,
             center = Offset(cx, cy)
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = pulseAlpha * 0.9f),
+            radius = radius * pulseScale * 1.25f,
+            center = Offset(cx, cy),
+            style = Stroke(width = 2.2f)
         )
     }
 

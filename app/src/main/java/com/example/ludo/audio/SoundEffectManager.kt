@@ -49,16 +49,23 @@ object SoundEffectManager {
     }
 
     fun playDiceRoll() {
-        // Futuristic cybernetic dice tumble sound
-        val durationMs = 400
+        // Classic physical wooden cup shaker rattle & tumbling dice audio
+        val durationMs = 480
         val totalSamples = (SAMPLE_RATE * durationMs / 1000)
         val samples = ShortArray(totalSamples)
         for (i in 0 until totalSamples) {
             val t = i.toDouble() / SAMPLE_RATE
-            val freq = 220.0 + (i % 600) * 0.8 + 80.0 * sin(2.0 * Math.PI * 45.0 * t)
-            val envelope = (1.0 - t / (durationMs / 1000.0)).coerceIn(0.0, 1.0)
-            val wave = sin(2.0 * Math.PI * freq * t) + 0.3 * sin(4.0 * Math.PI * freq * 1.5 * t)
-            samples[i] = (wave * 0.65 * envelope * Short.MAX_VALUE).toInt().toShort()
+            val progress = t / (durationMs / 1000.0)
+            
+            // Rapid rattle pulses simulating dice bouncing against cup walls
+            val rattlePhase = (t * 28.0) % 1.0
+            val rattleImpact = if (rattlePhase < 0.22) sin(rattlePhase * Math.PI / 0.22) else 0.0
+            val woodResonance = sin(2.0 * Math.PI * 340.0 * t) * 0.4 + sin(2.0 * Math.PI * 680.0 * t) * 0.2
+            val noise = (Math.random() * 2.0 - 1.0) * 0.25
+            
+            val envelope = (1.0 - progress * 0.8).coerceIn(0.0, 1.0)
+            val combined = (woodResonance + noise) * (0.3 + 0.7 * rattleImpact) * envelope
+            samples[i] = (combined * 0.8 * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         playPcm(samples)
     }

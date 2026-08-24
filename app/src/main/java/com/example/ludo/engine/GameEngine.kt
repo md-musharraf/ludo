@@ -122,16 +122,7 @@ class GameEngine {
                 } else {
                     val extraRollText = if (roll == 6) " (Bonus roll on 6!)" else ""
 
-                    // AUTO-MOVE:
-                    // 1) If exactly 1 token can move -> auto move!
-                    // 2) If all valid options are in home (0 tokens on board) -> auto move first available home token!
-                    val isSingleChoice = validMoves.size == 1 ||
-                        (validMoves.isNotEmpty() && validMoves.all { id ->
-                            currentPlayer.tokens.firstOrNull { it.id == id }?.state == TokenState.IN_HOME
-                        })
-
-                    if (isSingleChoice) {
-                        val tokenToMove = validMoves.first()
+                    if (currentPlayer.isAI) {
                         _state.update {
                             it.copy(
                                 diceResult = DiceResult(roll),
@@ -139,12 +130,11 @@ class GameEngine {
                                 validMoves = validMoves,
                                 consecutiveSixes = consecutive,
                                 gamePhase = GamePhase.WAITING_FOR_MOVE,
-                                isAutoMoving = true,
-                                moveMessage = "${currentPlayer.name} rolled $roll! Auto-moving...$extraRollText"
+                                isAutoMoving = false,
+                                moveMessage = "${currentPlayer.name} rolled $roll! AI is choosing piece...$extraRollText"
                             )
                         }
-                        delay(350) // Smooth pause to display dice number before auto-move
-                        selectToken(tokenToMove)
+                        aiPlayer?.executeMove(validMoves)
                     } else {
                         _state.update {
                             it.copy(
@@ -154,12 +144,8 @@ class GameEngine {
                                 consecutiveSixes = consecutive,
                                 gamePhase = GamePhase.WAITING_FOR_MOVE,
                                 isAutoMoving = false,
-                                moveMessage = "${currentPlayer.name} rolled a $roll! Tap a glowing piece$extraRollText"
+                                moveMessage = "${currentPlayer.name} rolled a $roll! Tap a glowing piece to move$extraRollText"
                             )
-                        }
-
-                        if (currentPlayer.isAI) {
-                            aiPlayer?.executeMove(validMoves)
                         }
                     }
                 }
