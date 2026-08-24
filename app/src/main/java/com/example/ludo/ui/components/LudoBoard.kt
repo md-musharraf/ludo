@@ -361,33 +361,33 @@ private fun DrawScope.drawPinGoti(
             color = Color.White.copy(alpha = pulseAlpha * 0.95f),
             radius = radius * pulseScale * 1.25f,
             center = Offset(cx, cy - radius * 0.15f),
-            style = Stroke(width = 2.4f)
+            style = Stroke(width = 2.5f)
         )
     }
 
     // 2. Base Contact Ring on Board
     val groundCenter = Offset(cx, cy + radius * 0.42f)
     drawCircle(
-        color = Color(0x33000000),
-        radius = radius * 0.62f,
+        color = Color(0x38000000),
+        radius = radius * 0.68f,
         center = Offset(groundCenter.x + 1f, groundCenter.y + 1.2f)
     )
     drawCircle(
         color = Color.White,
-        radius = radius * 0.58f,
+        radius = radius * 0.64f,
         center = groundCenter
     )
     drawCircle(
         color = color,
-        radius = radius * 0.48f,
+        radius = radius * 0.54f,
         center = groundCenter,
-        style = Stroke(width = 2.4f)
+        style = Stroke(width = 2.8f)
     )
 
-    // 3. Pin Geometry Definition
-    val pinHeadRadius = radius * 0.62f
+    // 3. Pin Geometry Definition (Bold Teardrop Silhouette)
+    val pinHeadRadius = radius * 0.72f
     val pinHeadCenter = Offset(cx, cy - radius * 0.28f)
-    val pinTip = Offset(cx, cy + radius * 0.45f)
+    val pinTip = Offset(cx, cy + radius * 0.48f)
 
     fun createPinPath(headCenter: Offset, tip: Offset, r: Float): Path {
         val path = Path()
@@ -424,12 +424,12 @@ private fun DrawScope.drawPinGoti(
         tip = Offset(pinTip.x + shadowOffset.x, pinTip.y + shadowOffset.y),
         r = pinHeadRadius * shadowRadius
     )
-    drawPath(shadowPath, color = Color(0x38000000), style = Fill)
+    drawPath(shadowPath, color = Color(0x40000000), style = Fill)
 
     // 5. White Outer Pin Shell
     val pinPath = createPinPath(pinHeadCenter, pinTip, pinHeadRadius)
     drawPath(pinPath, color = Color.White, style = Fill)
-    drawPath(pinPath, color = Color(0xFF757575), style = Stroke(width = 1.6f))
+    drawPath(pinPath, color = Color(0xFF424242), style = Stroke(width = 1.8f))
 
     // 6. Colored Inner Circle in Pin Head
     val innerColorRadius = pinHeadRadius * 0.65f
@@ -439,7 +439,7 @@ private fun DrawScope.drawPinGoti(
         center = pinHeadCenter
     )
     drawCircle(
-        color = Color(0x22000000),
+        color = Color(0x28000000),
         radius = innerColorRadius,
         center = pinHeadCenter,
         style = Stroke(width = 1.2f)
@@ -448,7 +448,7 @@ private fun DrawScope.drawPinGoti(
     // 7. Specular Gloss Highlight
     val glossCenter = Offset(pinHeadCenter.x - innerColorRadius * 0.28f, pinHeadCenter.y - innerColorRadius * 0.28f)
     drawCircle(
-        color = Color.White.copy(alpha = 0.55f),
+        color = Color.White.copy(alpha = 0.60f),
         radius = innerColorRadius * 0.35f,
         center = glossCenter
     )
