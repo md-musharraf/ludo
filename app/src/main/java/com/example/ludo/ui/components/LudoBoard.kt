@@ -355,7 +355,7 @@ private fun DrawScope.drawPinGoti(
 ) {
     val (cx, cy) = center.x to center.y
 
-    // 1. Realistic Optical Ground Shadow (Stays anchored on board surface)
+    // 1. Realistic Optical Ground Shadow
     if (isAnimating) {
         val shadowProgress = (hopHeight / (radius * 2.2f)).coerceIn(0f, 1f)
         val shadowScale = 1f + shadowProgress * 0.6f
@@ -376,66 +376,60 @@ private fun DrawScope.drawPinGoti(
             topLeft = Offset(groundCenter.x - shadowWidth / 2f, groundY - shadowHeight / 2f),
             size = Size(shadowWidth, shadowHeight)
         )
-    } else {
-        // Subtle resting ground contact shadow
-        val shadowWidth = radius * 1.25f
-        val shadowHeight = radius * 0.50f
-        val groundY = groundCenter.y + radius * 0.42f
+    }
 
-        drawOval(
-            color = Color.Black.copy(alpha = 0.22f),
-            topLeft = Offset(groundCenter.x - shadowWidth / 2f + 1f, groundY - shadowHeight / 2f + 1.5f),
-            size = Size(shadowWidth, shadowHeight)
+    // 2. Base Socket Ring on the Board (when resting)
+    if (!isAnimating) {
+        val socketRadius = radius * 0.70f
+        val socketY = groundCenter.y + radius * 0.42f
+        val socketCenter = Offset(groundCenter.x, socketY)
+
+        // Outer dark socket rim
+        drawCircle(
+            color = Color(0x35000000),
+            radius = socketRadius * 1.06f,
+            center = Offset(socketCenter.x + 0.8f, socketCenter.y + 1.2f)
+        )
+        drawCircle(
+            color = Color(0xFF263238),
+            radius = socketRadius,
+            center = socketCenter,
+            style = Stroke(width = 2.5f)
+        )
+        // Colored inner socket track
+        drawCircle(
+            color = color,
+            radius = socketRadius * 0.82f,
+            center = socketCenter,
+            style = Stroke(width = 3.2f)
+        )
+        // Inner socket floor
+        drawCircle(
+            color = Color.White,
+            radius = socketRadius * 0.52f,
+            center = socketCenter
         )
     }
 
-    // 2. Pulsing Luminous Aura when Valid to Move
+    // 3. Pulsing Luminous Aura when Valid to Move
     if (isValid) {
         drawCircle(
             color = color.copy(alpha = pulseAlpha * 0.45f),
             radius = radius * pulseScale * 1.55f,
-            center = Offset(cx, cy - radius * 0.18f)
+            center = Offset(cx, cy - radius * 0.20f)
         )
         drawCircle(
             color = Color.White.copy(alpha = pulseAlpha * 0.95f),
             radius = radius * pulseScale * 1.22f,
-            center = Offset(cx, cy - radius * 0.18f),
+            center = Offset(cx, cy - radius * 0.20f),
             style = Stroke(width = 2.4f)
         )
     }
 
-    // 3. Base Anchor Ring on Board (when resting)
-    if (!isAnimating) {
-        val anchorY = groundCenter.y + radius * 0.42f
-        val baseCenter = Offset(groundCenter.x, anchorY)
-
-        drawCircle(
-            color = Color(0x25000000),
-            radius = radius * 0.68f,
-            center = Offset(baseCenter.x + 0.8f, baseCenter.y + 1f)
-        )
-        drawCircle(
-            color = Color.White,
-            radius = radius * 0.64f,
-            center = baseCenter
-        )
-        drawCircle(
-            color = color,
-            radius = radius * 0.52f,
-            center = baseCenter,
-            style = Stroke(width = 2.8f)
-        )
-        drawCircle(
-            color = color.copy(alpha = 0.5f),
-            radius = radius * 0.20f,
-            center = baseCenter
-        )
-    }
-
-    // 4. Pin Geometry Definition (Iconic Map-Pin Teardrop Silhouette)
-    val pinHeadRadius = radius * 0.72f
-    val pinHeadCenter = Offset(cx, cy - radius * 0.28f)
-    val pinTip = Offset(cx, cy + radius * 0.48f)
+    // 4. Pin Geometry Definition (Tall Iconic Map-Pin Teardrop Silhouette)
+    val pinHeadRadius = radius * 0.76f
+    val pinHeadCenter = Offset(cx, cy - radius * 0.30f)
+    val pinTip = Offset(cx, cy + radius * 0.52f)
 
     fun createPinPath(headCenter: Offset, tip: Offset, r: Float): Path {
         val path = Path()
@@ -468,53 +462,41 @@ private fun DrawScope.drawPinGoti(
 
     val pinPath = createPinPath(pinHeadCenter, pinTip, pinHeadRadius)
 
-    // 5. Ambient Body Drop Shadow (Soft & Subtle)
+    // 5. 3D Drop Shadow Behind Pin (Clean & Distinct)
     if (!isAnimating) {
-        val ambientShadowPath = createPinPath(
-            headCenter = Offset(pinHeadCenter.x + 1.5f, pinHeadCenter.y + 2f),
-            tip = Offset(pinTip.x + 1.5f, pinTip.y + 2f),
+        val shadowPath = createPinPath(
+            headCenter = Offset(pinHeadCenter.x + 3.0f, pinHeadCenter.y + 4.0f),
+            tip = Offset(pinTip.x + 3.0f, pinTip.y + 4.0f),
             r = pinHeadRadius
         )
-        drawPath(ambientShadowPath, color = Color(0x22000000), style = Fill)
+        drawPath(shadowPath, color = Color(0x40000000), style = Fill)
     }
 
-    // 6. Porcelain White Pin Body Shell
-    drawPath(pinPath, color = Color(0xFFFFFFFF), style = Fill)
-    drawPath(pinPath, color = Color(0xFF37474F), style = Stroke(width = 1.8f))
+    // 6. White Pin Body Shell with Crisp Dark Contour
+    drawPath(pinPath, color = Color.White, style = Fill)
+    drawPath(pinPath, color = Color(0xFF263238), style = Stroke(width = 2.2f))
 
-    // 7. Jewel Colored Core
+    // 7. Jewel Colored Core (Window in Pin Head)
     val innerColorRadius = pinHeadRadius * 0.65f
     drawCircle(
         color = color,
         radius = innerColorRadius,
         center = pinHeadCenter
     )
-    // Subtle 3D Inner Edge Shadow
+    // Dark Inner Border Ring (matches screenshot)
     drawCircle(
-        color = Color(0x25000000),
+        color = Color(0xFF263238),
         radius = innerColorRadius,
         center = pinHeadCenter,
-        style = Stroke(width = 1.4f)
-    )
-    // Metallic Divider Ring
-    drawCircle(
-        color = Color.White.copy(alpha = 0.45f),
-        radius = innerColorRadius,
-        center = pinHeadCenter,
-        style = Stroke(width = 1.0f)
+        style = Stroke(width = 1.6f)
     )
 
-    // 8. Multi-Point Specular Gloss Highlights
-    val glossCenter = Offset(pinHeadCenter.x - innerColorRadius * 0.30f, pinHeadCenter.y - innerColorRadius * 0.30f)
+    // 8. Subtle Specular Highlight
+    val glossCenter = Offset(pinHeadCenter.x - innerColorRadius * 0.28f, pinHeadCenter.y - innerColorRadius * 0.28f)
     drawCircle(
-        color = Color.White.copy(alpha = 0.70f),
-        radius = innerColorRadius * 0.34f,
+        color = Color.White.copy(alpha = 0.50f),
+        radius = innerColorRadius * 0.32f,
         center = glossCenter
-    )
-    drawCircle(
-        color = Color.White,
-        radius = innerColorRadius * 0.14f,
-        center = Offset(glossCenter.x - innerColorRadius * 0.05f, glossCenter.y - innerColorRadius * 0.05f)
     )
 }
 
