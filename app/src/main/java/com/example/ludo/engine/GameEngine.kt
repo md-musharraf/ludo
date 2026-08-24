@@ -245,7 +245,7 @@ class GameEngine {
         tokenId: Int,
         fromPos: Pair<Int, Int>,
         toPos: Pair<Int, Int>,
-        frames: Int = 10
+        frames: Int = 14
     ) {
         for (f in 1..frames) {
             val progress = f.toFloat() / frames.toFloat()
@@ -258,7 +258,7 @@ class GameEngine {
                     animatingHopProgress = progress
                 )
             }
-            delay(16) // Smooth 60fps hop
+            delay(14) // Silky smooth 60-120fps physics hop
         }
         _state.update {
             it.copy(

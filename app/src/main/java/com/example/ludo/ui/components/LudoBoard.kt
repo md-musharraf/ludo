@@ -32,18 +32,18 @@ private data class TokenRenderInfo(
     val isValid: Boolean,
     val isCurrentPlayer: Boolean,
     val isAnimating: Boolean = false,
-    val shadowOffset: Offset = Offset(2.5f, 4f),
-    val shadowRadius: Float = 1.0f
+    val groundCenter: Offset = Offset.Zero,
+    val hopHeight: Float = 0f
 )
 
 /**
  * Authentic Clean Ludo Board with iconic White & Jewel-Colored Map-Pin Gotis.
- * Exact replication of classic mobile board styling:
+ * Features:
  * - 4 vibrant home bases with dynamic empty/occupied socket beds
  * - 4 center triangles meeting at center apex
  * - 4 safe-spot outlined stars
  * - 4 directional entry arrows
- * - Iconic teardrop / map-pin gotis with ground anchor rings and realistic drop shadows
+ * - Iconic teardrop / map-pin gotis with realistic diffused ground shadows and silky sinusoidal hop physics
  */
 @Composable
 fun LudoBoard(
@@ -65,7 +65,7 @@ fun LudoBoard(
 
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.25f,
+        targetValue = 1.22f,
         animationSpec = infiniteRepeatable(
             animation = tween(600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -190,7 +190,8 @@ fun LudoBoard(
                                 center = Offset(cx, cy),
                                 radius = radius,
                                 isValid = isValid,
-                                isCurrentPlayer = isCurr
+                                isCurrentPlayer = isCurr,
+                                groundCenter = Offset(cx, cy)
                             )
                         )
                     }
@@ -260,30 +261,36 @@ fun LudoBoard(
                         center = Offset(cx, cy),
                         radius = tokenRadius,
                         isValid = isValid,
-                        isCurrentPlayer = isCurr
+                        isCurrentPlayer = isCurr,
+                        groundCenter = Offset(cx, cy)
                     )
                 )
             }
         }
 
-        // 12. Smooth Parabolic Hop Animation
+        // 12. Silky Smooth Sinusoidal Physics Hop Animation
         if (gameState.animatingPlayerId != null && gameState.animatingTokenId != null &&
             gameState.animatingFromPos != null && gameState.animatingToPos != null) {
 
             val from = gameState.animatingFromPos
             val to = gameState.animatingToPos
-            val progress = gameState.animatingHopProgress
+            val rawProgress = gameState.animatingHopProgress
+
+            // Smooth ease-in-out cosine interpolation for horizontal track trajectory
+            val easedProgress = (1f - cos(rawProgress * Math.PI.toFloat())) / 2f
 
             val fromX = offsetX + from.second * cellSize + cellSize / 2
             val fromY = offsetY + from.first * cellSize + cellSize / 2
             val toX = offsetX + to.second * cellSize + cellSize / 2
             val toY = offsetY + to.first * cellSize + cellSize / 2
 
-            val curX = fromX + (toX - fromX) * progress
-            val curY = fromY + (toY - fromY) * progress
-            val hopHeight = sin(progress * Math.PI).toFloat() * cellSize * 0.85f
-            val elevatedY = curY - hopHeight
-            val elevatedScale = 1f + sin(progress * Math.PI).toFloat() * 0.32f
+            val curGroundX = fromX + (toX - fromX) * easedProgress
+            val curGroundY = fromY + (toY - fromY) * easedProgress
+
+            // Natural parabolic gravity arc for elevation
+            val hopHeight = sin(rawProgress * Math.PI.toFloat()) * cellSize * 0.95f
+            val elevatedY = curGroundY - hopHeight
+            val elevatedScale = 1f + sin(rawProgress * Math.PI.toFloat()) * 0.22f
             val tokenRadius = cellSize * 0.44f * elevatedScale
 
             val player = gameState.players.firstOrNull { it.id == gameState.animatingPlayerId }
@@ -293,13 +300,13 @@ fun LudoBoard(
                         playerId = player.id,
                         tokenId = gameState.animatingTokenId,
                         playerColor = player.color,
-                        center = Offset(curX, elevatedY),
+                        center = Offset(curGroundX, elevatedY),
                         radius = tokenRadius,
                         isValid = false,
                         isCurrentPlayer = true,
                         isAnimating = true,
-                        shadowOffset = Offset(2.5f, hopHeight + 4f),
-                        shadowRadius = 1f + hopHeight / 8f
+                        groundCenter = Offset(curGroundX, curGroundY),
+                        hopHeight = hopHeight
                     )
                 )
             }
@@ -314,8 +321,8 @@ fun LudoBoard(
                 isValid = info.isValid,
                 pulseAlpha = pulseAlpha,
                 pulseScale = pulseScale,
-                shadowOffset = info.shadowOffset,
-                shadowRadius = info.shadowRadius,
+                groundCenter = info.groundCenter,
+                hopHeight = info.hopHeight,
                 isAnimating = info.isAnimating
             )
         }
@@ -330,12 +337,10 @@ fun LudoBoard(
 /**
  * Renders the iconic White & Jewel-Colored Map-Pin Goti (Pawn).
  * Features:
- * - Base anchor ring on the cell with subtle shadow
- * - Soft drop shadow cast to bottom-right
- * - White teardrop / map-pin body with beveled outline
- * - Jewel colored circular core inside the pin head
- * - Specular gloss highlight
- * - Golden pulsing halo when valid to move
+ * - Multi-layered diffused ground shadow anchored to board surface
+ * - White teardrop / map-pin body with refined precision bevel
+ * - Jewel colored circular core inside the pin head with multi-point specular gloss
+ * - Luminous glowing aura when selectable
  */
 private fun DrawScope.drawPinGoti(
     center: Offset,
@@ -344,47 +349,90 @@ private fun DrawScope.drawPinGoti(
     isValid: Boolean,
     pulseAlpha: Float,
     pulseScale: Float,
-    shadowOffset: Offset,
-    shadowRadius: Float,
+    groundCenter: Offset,
+    hopHeight: Float,
     isAnimating: Boolean
 ) {
     val (cx, cy) = center.x to center.y
 
-    // 1. Pulsing Halo when Valid to Move
-    if (isValid) {
-        drawCircle(
-            color = color.copy(alpha = pulseAlpha * 0.55f),
-            radius = radius * pulseScale * 1.55f,
-            center = Offset(cx, cy - radius * 0.15f)
+    // 1. Realistic Optical Ground Shadow (Stays anchored on board surface)
+    if (isAnimating) {
+        val shadowProgress = (hopHeight / (radius * 2.2f)).coerceIn(0f, 1f)
+        val shadowScale = 1f + shadowProgress * 0.6f
+        val shadowAlpha = (0.28f * (1f - shadowProgress * 0.55f)).coerceIn(0.06f, 0.30f)
+        val shadowWidth = radius * 1.35f * shadowScale
+        val shadowHeight = radius * 0.55f * shadowScale
+        val groundY = groundCenter.y + radius * 0.42f
+
+        // Outer soft ambient blur
+        drawOval(
+            color = Color.Black.copy(alpha = shadowAlpha * 0.35f),
+            topLeft = Offset(groundCenter.x - shadowWidth * 0.65f, groundY - shadowHeight * 0.65f),
+            size = Size(shadowWidth * 1.3f, shadowHeight * 1.3f)
         )
-        drawCircle(
-            color = Color.White.copy(alpha = pulseAlpha * 0.95f),
-            radius = radius * pulseScale * 1.25f,
-            center = Offset(cx, cy - radius * 0.15f),
-            style = Stroke(width = 2.5f)
+        // Inner diffused contact core
+        drawOval(
+            color = Color.Black.copy(alpha = shadowAlpha),
+            topLeft = Offset(groundCenter.x - shadowWidth / 2f, groundY - shadowHeight / 2f),
+            size = Size(shadowWidth, shadowHeight)
+        )
+    } else {
+        // Subtle resting ground contact shadow
+        val shadowWidth = radius * 1.25f
+        val shadowHeight = radius * 0.50f
+        val groundY = groundCenter.y + radius * 0.42f
+
+        drawOval(
+            color = Color.Black.copy(alpha = 0.22f),
+            topLeft = Offset(groundCenter.x - shadowWidth / 2f + 1f, groundY - shadowHeight / 2f + 1.5f),
+            size = Size(shadowWidth, shadowHeight)
         )
     }
 
-    // 2. Base Contact Ring on Board
-    val groundCenter = Offset(cx, cy + radius * 0.42f)
-    drawCircle(
-        color = Color(0x38000000),
-        radius = radius * 0.68f,
-        center = Offset(groundCenter.x + 1f, groundCenter.y + 1.2f)
-    )
-    drawCircle(
-        color = Color.White,
-        radius = radius * 0.64f,
-        center = groundCenter
-    )
-    drawCircle(
-        color = color,
-        radius = radius * 0.54f,
-        center = groundCenter,
-        style = Stroke(width = 2.8f)
-    )
+    // 2. Pulsing Luminous Aura when Valid to Move
+    if (isValid) {
+        drawCircle(
+            color = color.copy(alpha = pulseAlpha * 0.45f),
+            radius = radius * pulseScale * 1.55f,
+            center = Offset(cx, cy - radius * 0.18f)
+        )
+        drawCircle(
+            color = Color.White.copy(alpha = pulseAlpha * 0.95f),
+            radius = radius * pulseScale * 1.22f,
+            center = Offset(cx, cy - radius * 0.18f),
+            style = Stroke(width = 2.4f)
+        )
+    }
 
-    // 3. Pin Geometry Definition (Bold Teardrop Silhouette)
+    // 3. Base Anchor Ring on Board (when resting)
+    if (!isAnimating) {
+        val anchorY = groundCenter.y + radius * 0.42f
+        val baseCenter = Offset(groundCenter.x, anchorY)
+
+        drawCircle(
+            color = Color(0x25000000),
+            radius = radius * 0.68f,
+            center = Offset(baseCenter.x + 0.8f, baseCenter.y + 1f)
+        )
+        drawCircle(
+            color = Color.White,
+            radius = radius * 0.64f,
+            center = baseCenter
+        )
+        drawCircle(
+            color = color,
+            radius = radius * 0.52f,
+            center = baseCenter,
+            style = Stroke(width = 2.8f)
+        )
+        drawCircle(
+            color = color.copy(alpha = 0.5f),
+            radius = radius * 0.20f,
+            center = baseCenter
+        )
+    }
+
+    // 4. Pin Geometry Definition (Iconic Map-Pin Teardrop Silhouette)
     val pinHeadRadius = radius * 0.72f
     val pinHeadCenter = Offset(cx, cy - radius * 0.28f)
     val pinTip = Offset(cx, cy + radius * 0.48f)
@@ -418,39 +466,55 @@ private fun DrawScope.drawPinGoti(
         return path
     }
 
-    // 4. Drop Shadow of the Pin
-    val shadowPath = createPinPath(
-        headCenter = Offset(pinHeadCenter.x + shadowOffset.x, pinHeadCenter.y + shadowOffset.y),
-        tip = Offset(pinTip.x + shadowOffset.x, pinTip.y + shadowOffset.y),
-        r = pinHeadRadius * shadowRadius
-    )
-    drawPath(shadowPath, color = Color(0x40000000), style = Fill)
-
-    // 5. White Outer Pin Shell
     val pinPath = createPinPath(pinHeadCenter, pinTip, pinHeadRadius)
-    drawPath(pinPath, color = Color.White, style = Fill)
-    drawPath(pinPath, color = Color(0xFF424242), style = Stroke(width = 1.8f))
 
-    // 6. Colored Inner Circle in Pin Head
+    // 5. Ambient Body Drop Shadow (Soft & Subtle)
+    if (!isAnimating) {
+        val ambientShadowPath = createPinPath(
+            headCenter = Offset(pinHeadCenter.x + 1.5f, pinHeadCenter.y + 2f),
+            tip = Offset(pinTip.x + 1.5f, pinTip.y + 2f),
+            r = pinHeadRadius
+        )
+        drawPath(ambientShadowPath, color = Color(0x22000000), style = Fill)
+    }
+
+    // 6. Porcelain White Pin Body Shell
+    drawPath(pinPath, color = Color(0xFFFFFFFF), style = Fill)
+    drawPath(pinPath, color = Color(0xFF37474F), style = Stroke(width = 1.8f))
+
+    // 7. Jewel Colored Core
     val innerColorRadius = pinHeadRadius * 0.65f
     drawCircle(
         color = color,
         radius = innerColorRadius,
         center = pinHeadCenter
     )
+    // Subtle 3D Inner Edge Shadow
     drawCircle(
-        color = Color(0x28000000),
+        color = Color(0x25000000),
         radius = innerColorRadius,
         center = pinHeadCenter,
-        style = Stroke(width = 1.2f)
+        style = Stroke(width = 1.4f)
+    )
+    // Metallic Divider Ring
+    drawCircle(
+        color = Color.White.copy(alpha = 0.45f),
+        radius = innerColorRadius,
+        center = pinHeadCenter,
+        style = Stroke(width = 1.0f)
     )
 
-    // 7. Specular Gloss Highlight
-    val glossCenter = Offset(pinHeadCenter.x - innerColorRadius * 0.28f, pinHeadCenter.y - innerColorRadius * 0.28f)
+    // 8. Multi-Point Specular Gloss Highlights
+    val glossCenter = Offset(pinHeadCenter.x - innerColorRadius * 0.30f, pinHeadCenter.y - innerColorRadius * 0.30f)
     drawCircle(
-        color = Color.White.copy(alpha = 0.60f),
-        radius = innerColorRadius * 0.35f,
+        color = Color.White.copy(alpha = 0.70f),
+        radius = innerColorRadius * 0.34f,
         center = glossCenter
+    )
+    drawCircle(
+        color = Color.White,
+        radius = innerColorRadius * 0.14f,
+        center = Offset(glossCenter.x - innerColorRadius * 0.05f, glossCenter.y - innerColorRadius * 0.05f)
     )
 }
 
