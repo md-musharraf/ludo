@@ -65,14 +65,15 @@ fun LudoBoard(
         label = "pulseScale"
     )
 
-    var renderedTokens by remember { mutableStateOf<List<TokenRenderInfo>>(emptyList()) }
+    val renderedTokens = remember { mutableListOf<TokenRenderInfo>() }
 
     Canvas(
         modifier = modifier.pointerInput(gameState) {
             detectTapGestures { tapOffset ->
                 val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex) ?: return@detectTapGestures
 
-                for (info in renderedTokens.reversed()) {
+                val tokensCopy = synchronized(renderedTokens) { renderedTokens.toList() }
+                for (info in tokensCopy.reversed()) {
                     if (info.playerId == currentPlayer.id && info.isValid) {
                         val dx = tapOffset.x - info.center.x
                         val dy = tapOffset.y - info.center.y
@@ -292,7 +293,10 @@ fun LudoBoard(
             )
         }
 
-        renderedTokens = tokenList
+        synchronized(renderedTokens) {
+            renderedTokens.clear()
+            renderedTokens.addAll(tokenList)
+        }
     }
 }
 

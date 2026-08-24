@@ -13,12 +13,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -27,12 +26,8 @@ import com.example.ludo.theme.*
 import kotlinx.coroutines.delay
 
 /**
- * Classic Physical Dice Cup & 3D Ivory Dice Component.
- * Features:
- * - Rich mahogany leather/wood shaker cup with golden brass rim
- * - Deep velvet felt cup interior
- * - 3D Ivory porcelain dice with beveled edges and realistic indented pips (Ruby Red 1 & 6)
- * - Authentic physics animations: cup shaker oscillation, 3D tumbling rotation, spring-damped landing bounce
+ * Rock-solid Classic Physical Dice Cup & 3D Ivory Dice Component.
+ * Fixed-size container with GPU-accelerated graphicsLayer animations to prevent any layout shifts.
  */
 @Composable
 fun DiceView(
@@ -40,16 +35,16 @@ fun DiceView(
     isRolling: Boolean,
     enabled: Boolean,
     playerColor: Color = LudoGreen,
-    size: Dp = 56.dp,
-    showPromptBadge: Boolean = true,
+    size: Dp = 52.dp,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "classicDiceCupAnim")
 
     // Cup shaker tilt oscillation during rolling
     val cupTilt by infiniteTransition.animateFloat(
-        initialValue = -14f,
-        targetValue = 14f,
+        initialValue = -12f,
+        targetValue = 12f,
         animationSpec = infiniteRepeatable(
             animation = tween(80, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -62,7 +57,7 @@ fun DiceView(
         initialValue = 0f,
         targetValue = 720f,
         animationSpec = infiniteRepeatable(
-            animation = tween(500, easing = LinearEasing),
+            animation = tween(450, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "rollingRotation"
@@ -70,8 +65,8 @@ fun DiceView(
 
     // Elastic scaling while shaking
     val rollingScale by infiniteTransition.animateFloat(
-        initialValue = 0.90f,
-        targetValue = 1.12f,
+        initialValue = 0.92f,
+        targetValue = 1.08f,
         animationSpec = infiniteRepeatable(
             animation = tween(120, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -90,20 +85,9 @@ fun DiceView(
         label = "glowAlpha"
     )
 
-    // Prompt badge gentle floating pulse
-    val promptScale by infiniteTransition.animateFloat(
-        initialValue = 0.94f,
-        targetValue = 1.06f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "promptScale"
-    )
-
     // Spring-damped landing bounce when roll finishes
     val landingScale by animateFloatAsState(
-        targetValue = if (isRolling) 1f else if (enabled) 1.05f else 1f,
+        targetValue = if (isRolling) 1f else if (enabled) 1.04f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
@@ -123,54 +107,27 @@ fun DiceView(
         }
     }
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = Modifier.padding(2.dp)
+    Box(
+        modifier = modifier.size(size),
+        contentAlignment = Alignment.Center
     ) {
-        // Active "ROLL" Prompt Badge
-        if (showPromptBadge && enabled && !isRolling) {
-            Box(
-                modifier = Modifier
-                    .scale(promptScale)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(
-                                playerColor.copy(alpha = 0.25f),
-                                Color(0xFFFFD54F).copy(alpha = 0.35f),
-                                playerColor.copy(alpha = 0.25f)
-                            )
-                        )
-                    )
-                    .border(1.2.dp, playerColor.copy(alpha = glowAlpha), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 7.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = "ROLL \uD83C\uDFB2",
-                    color = if (playerColor == LudoYellow) Color(0xFFE65100) else playerColor,
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 0.5.sp
-                )
-            }
-            Spacer(modifier = Modifier.height(3.dp))
-        }
-
         // Classic Leather/Wood Shaker Cup & 3D Dice Container
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(size)
-                .rotate(if (isRolling) cupTilt else 0f)
-                .scale(if (isRolling) rollingScale * landingScale else landingScale)
+                .fillMaxSize()
+                .graphicsLayer {
+                    rotationZ = if (isRolling) cupTilt else 0f
+                    scaleX = if (isRolling) rollingScale * landingScale else landingScale
+                    scaleY = if (isRolling) rollingScale * landingScale else landingScale
+                }
                 .shadow(
-                    elevation = if (enabled) 10.dp else 3.dp,
-                    shape = RoundedCornerShape(16.dp),
+                    elevation = if (enabled) 8.dp else 2.dp,
+                    shape = RoundedCornerShape(14.dp),
                     ambientColor = if (enabled) playerColor.copy(alpha = 0.5f) else Color(0x33000000),
                     spotColor = if (enabled) playerColor else Color(0x44000000)
                 )
-                .clip(RoundedCornerShape(16.dp))
+                .clip(RoundedCornerShape(14.dp))
                 // Outer Mahogany Cup Body
                 .background(
                     Brush.verticalGradient(
@@ -183,9 +140,9 @@ fun DiceView(
                 )
                 // Brass/Gold Outer Rim Frame
                 .border(
-                    width = if (enabled) 2.5.dp else 1.2.dp,
+                    width = if (enabled) 2.2.dp else 1.2.dp,
                     color = if (enabled) playerColor.copy(alpha = glowAlpha) else Color(0xFF8D6E63),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(14.dp)
                 )
                 .clickable(
                     enabled = enabled && !isRolling,
@@ -193,14 +150,14 @@ fun DiceView(
                     indication = null,
                     onClick = onClick
                 )
-                .padding(3.5.dp)
+                .padding(3.dp)
         ) {
             // Inner Cup Felt Well
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(10.dp))
                     .background(
                         Brush.radialGradient(
                             colors = listOf(
@@ -210,7 +167,7 @@ fun DiceView(
                             )
                         )
                     )
-                    .border(1.dp, Color(0xFF3E2723), RoundedCornerShape(12.dp))
+                    .border(1.dp, Color(0xFF3E2723), RoundedCornerShape(10.dp))
             ) {
                 // 3D Ivory Porcelain Dice
                 val diceBoxSize = size * 0.72f
@@ -218,14 +175,16 @@ fun DiceView(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(diceBoxSize)
-                        .rotate(if (isRolling) rollingRotation else 0f)
+                        .graphicsLayer {
+                            rotationZ = if (isRolling) rollingRotation else 0f
+                        }
                         .shadow(
                             elevation = 4.dp,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(8.dp),
                             ambientColor = Color(0x88000000),
                             spotColor = Color.Black
                         )
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         // Ivory surface with multi-stop top-light gradient
                         .background(
                             Brush.linearGradient(
@@ -239,7 +198,7 @@ fun DiceView(
                                 end = Offset(100f, 100f)
                             )
                         )
-                        .border(1.2.dp, Color(0xFFD7CCC8), RoundedCornerShape(10.dp))
+                        .border(1.2.dp, Color(0xFFD7CCC8), RoundedCornerShape(8.dp))
                 ) {
                     // Realistic Indented Pips Canvas
                     Canvas(modifier = Modifier.size(diceBoxSize * 0.78f)) {
@@ -317,3 +276,4 @@ fun DiceView(
         }
     }
 }
+

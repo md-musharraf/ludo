@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -42,7 +41,7 @@ fun CornerPlayerDock(
     modifier: Modifier = Modifier
 ) {
     if (player == null) {
-        Box(modifier = modifier.size(100.dp, 60.dp))
+        Box(modifier = modifier)
         return
     }
 
@@ -50,21 +49,11 @@ fun CornerPlayerDock(
     val playerLightColor = getPlayerLightColor(player.color)
 
     val infiniteTransition = rememberInfiniteTransition(label = "dockPulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.03f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
     val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
+        initialValue = 0.35f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
+            animation = tween(850, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glowAlpha"
@@ -74,33 +63,32 @@ fun CornerPlayerDock(
 
     Row(
         modifier = modifier
-            .scale(if (isCurrentTurn) pulseScale else 1f)
             .shadow(
-                elevation = if (isCurrentTurn) 8.dp else 2.dp,
-                shape = RoundedCornerShape(16.dp),
-                ambientColor = if (isCurrentTurn) playerColor.copy(alpha = 0.4f) else Color.Transparent,
+                elevation = if (isCurrentTurn) 6.dp else 1.5.dp,
+                shape = RoundedCornerShape(14.dp),
+                ambientColor = if (isCurrentTurn) playerColor.copy(alpha = 0.35f) else Color.Transparent,
                 spotColor = if (isCurrentTurn) playerColor else Color.Transparent
             )
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(
                 Brush.verticalGradient(
                     colors = if (isCurrentTurn) listOf(
                         Color.White,
-                        playerLightColor.copy(alpha = 0.35f)
+                        playerLightColor.copy(alpha = 0.28f)
                     ) else listOf(
                         Color.White,
-                        Color(0xFFF9F9F9)
+                        Color(0xFFFBFBFB)
                     )
                 )
             )
             .border(
                 width = if (isCurrentTurn) 2.dp else 1.dp,
-                color = if (isCurrentTurn) playerColor.copy(alpha = glowAlpha) else Color(0xFFE0E0E0),
-                shape = RoundedCornerShape(16.dp)
+                color = if (isCurrentTurn) playerColor.copy(alpha = glowAlpha) else Color(0xFFE5E0D8),
+                shape = RoundedCornerShape(14.dp)
             )
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (isLeft) {
             DiceView(
@@ -108,26 +96,26 @@ fun CornerPlayerDock(
                 isRolling = isRolling,
                 enabled = isCurrentTurn && !player.isAI,
                 playerColor = playerColor,
-                showPromptBadge = true,
                 onClick = onDiceClick
             )
             PlayerInfoSection(
                 player = player,
                 playerColor = playerColor,
-                isCurrentTurn = isCurrentTurn
+                isCurrentTurn = isCurrentTurn,
+                modifier = Modifier.weight(1f)
             )
         } else {
             PlayerInfoSection(
                 player = player,
                 playerColor = playerColor,
-                isCurrentTurn = isCurrentTurn
+                isCurrentTurn = isCurrentTurn,
+                modifier = Modifier.weight(1f)
             )
             DiceView(
                 diceValue = diceValue,
                 isRolling = isRolling,
                 enabled = isCurrentTurn && !player.isAI,
                 playerColor = playerColor,
-                showPromptBadge = true,
                 onClick = onDiceClick
             )
         }
@@ -138,9 +126,11 @@ fun CornerPlayerDock(
 private fun PlayerInfoSection(
     player: Player,
     playerColor: Color,
-    isCurrentTurn: Boolean
+    isCurrentTurn: Boolean,
+    modifier: Modifier = Modifier
 ) {
     Column(
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -150,23 +140,23 @@ private fun PlayerInfoSection(
         ) {
             Box(
                 modifier = Modifier
-                    .size(20.dp)
+                    .size(18.dp)
                     .clip(CircleShape)
-                    .background(playerColor.copy(alpha = 0.2f))
-                    .border(1.5.dp, playerColor, CircleShape),
+                    .background(playerColor.copy(alpha = 0.18f))
+                    .border(1.2.dp, playerColor, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (player.isAI) "\uD83E\uDD16" else "\uD83D\uDC64",
-                    fontSize = 11.sp
+                    fontSize = 10.sp
                 )
             }
 
-            Spacer(modifier = Modifier.width(5.dp))
+            Spacer(modifier = Modifier.width(4.dp))
 
             Text(
                 text = player.name,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = if (isCurrentTurn) FontWeight.Bold else FontWeight.SemiBold,
                 color = if (isCurrentTurn) playerColor else Color(0xFF424242),
                 maxLines = 1,
@@ -174,7 +164,7 @@ private fun PlayerInfoSection(
             )
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(3.dp))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -185,7 +175,7 @@ private fun PlayerInfoSection(
                     TokenState.FINISHED -> {
                         Box(
                             modifier = Modifier
-                                .size(9.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
                                 .background(playerColor)
                                 .border(1.dp, SafeZoneStar, CircleShape)
@@ -194,18 +184,18 @@ private fun PlayerInfoSection(
                     TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> {
                         Box(
                             modifier = Modifier
-                                .size(9.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
                                 .background(Color.White)
-                                .border(2.dp, playerColor, CircleShape)
+                                .border(1.8.dp, playerColor, CircleShape)
                         )
                     }
                     TokenState.IN_HOME -> {
                         Box(
                             modifier = Modifier
-                                .size(9.dp)
+                                .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFFBDBDBD))
+                                .background(Color(0xFFCFD8DC))
                         )
                     }
                 }

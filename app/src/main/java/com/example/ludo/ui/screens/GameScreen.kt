@@ -68,14 +68,15 @@ fun GameScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. TOP HEADER
+            // 1. TOP HEADER (Fixed Height: 40dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(40.dp)
                     .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -88,7 +89,7 @@ fun GameScreen(
                         .background(Color.White)
                         .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                 ) {
-                    Text("\uD83C\uDFE0", fontSize = 16.sp)
+                    Text("🏠", fontSize = 16.sp)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -110,7 +111,7 @@ fun GameScreen(
                             .background(Color.White)
                             .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text(if (soundEnabled) "\uD83D\uDD0A" else "\uD83D\uDD07", fontSize = 15.sp)
+                        Text(if (soundEnabled) "🔊" else "🔇", fontSize = 15.sp)
                     }
 
                     IconButton(
@@ -121,7 +122,7 @@ fun GameScreen(
                             .background(Color.White)
                             .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text("\u2753", fontSize = 15.sp)
+                        Text("❓", fontSize = 15.sp)
                     }
 
                     IconButton(
@@ -132,16 +133,16 @@ fun GameScreen(
                             .background(Color.White)
                             .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text("\uD83D\uDD04", fontSize = 15.sp)
+                        Text("🔄", fontSize = 15.sp)
                     }
                 }
             }
 
-            // 2. TOP CORNER DOCKS
+            // 2. TOP CORNER DOCKS (Fixed Height: 66dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .height(66.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -156,10 +157,12 @@ fun GameScreen(
                             viewModel.rollDice()
                         }
                     },
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 CornerPlayerDock(
                     player = greenPlayer,
@@ -172,16 +175,18 @@ fun GameScreen(
                             viewModel.rollDice()
                         }
                     },
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
                 )
             }
 
-            // 3. CENTER BOARD
+            // 3. CENTER BOARD (Constant Aspect Ratio & Fixed Bounds)
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .aspectRatio(1f)
-                    .padding(vertical = 2.dp),
+                    .padding(vertical = 4.dp),
                 contentAlignment = Alignment.Center
             ) {
                 LudoBoard(
@@ -193,15 +198,16 @@ fun GameScreen(
                 )
             }
 
-            // 4. LIVE GUIDANCE BANNER
+            // 4. LIVE GUIDANCE BANNER (Fixed Height: 34dp)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .height(34.dp)
+                    .padding(horizontal = 4.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Color.White)
-                    .border(1.5.dp, currentPlayerColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .border(1.5.dp, currentPlayerColor.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -210,15 +216,16 @@ fun GameScreen(
                     fontWeight = FontWeight.Bold,
                     color = currentPlayerColor,
                     textAlign = TextAlign.Center,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
             }
 
-            // 5. BOTTOM CORNER DOCKS
+            // 5. BOTTOM CORNER DOCKS (Fixed Height: 66dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
+                    .height(66.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -233,10 +240,12 @@ fun GameScreen(
                             viewModel.rollDice()
                         }
                     },
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 CornerPlayerDock(
                     player = yellowPlayer,
@@ -249,7 +258,9 @@ fun GameScreen(
                             viewModel.rollDice()
                         }
                     },
-                    modifier = Modifier.weight(1f, fill = false)
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
                 )
             }
         }
