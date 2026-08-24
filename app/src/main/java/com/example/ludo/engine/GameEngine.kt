@@ -136,16 +136,33 @@ class GameEngine {
                         }
                         aiPlayer?.executeMove(validMoves)
                     } else {
-                        _state.update {
-                            it.copy(
-                                diceResult = DiceResult(roll),
-                                isDiceRollingForPlayer = null,
-                                validMoves = validMoves,
-                                consecutiveSixes = consecutive,
-                                gamePhase = GamePhase.WAITING_FOR_MOVE,
-                                isAutoMoving = false,
-                                moveMessage = "${currentPlayer.name} rolled a $roll! Tap a glowing piece to move$extraRollText"
-                            )
+                        if (validMoves.size == 1) {
+                            val autoTokenId = validMoves.first()
+                            _state.update {
+                                it.copy(
+                                    diceResult = DiceResult(roll),
+                                    isDiceRollingForPlayer = null,
+                                    validMoves = validMoves,
+                                    consecutiveSixes = consecutive,
+                                    gamePhase = GamePhase.WAITING_FOR_MOVE,
+                                    isAutoMoving = true,
+                                    moveMessage = "${currentPlayer.name} rolled $roll! Auto-moving piece...$extraRollText"
+                                )
+                            }
+                            delay(350)
+                            selectToken(autoTokenId)
+                        } else {
+                            _state.update {
+                                it.copy(
+                                    diceResult = DiceResult(roll),
+                                    isDiceRollingForPlayer = null,
+                                    validMoves = validMoves,
+                                    consecutiveSixes = consecutive,
+                                    gamePhase = GamePhase.WAITING_FOR_MOVE,
+                                    isAutoMoving = false,
+                                    moveMessage = "${currentPlayer.name} rolled a $roll! Tap a glowing piece to move$extraRollText"
+                                )
+                            }
                         }
                     }
                 }
