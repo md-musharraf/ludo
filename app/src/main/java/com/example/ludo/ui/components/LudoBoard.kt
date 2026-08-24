@@ -43,47 +43,46 @@ private data class PawnColorScheme(
     val deepShadow: Color
 )
 
-private fun getPawnColors(playerColor: PlayerColor): PawnColorScheme {
-    return when (playerColor) {
-        PlayerColor.RED -> PawnColorScheme(
-            highlightColor = Color(0xFFFF8A80),
-            lightColor = Color(0xFFFF5252),
-            baseColor = Color(0xFFD32F2F),
-            darkColor = Color(0xFFB71C1C),
-            deepShadow = Color(0xFF5A0000)
-        )
-        PlayerColor.GREEN -> PawnColorScheme(
-            highlightColor = Color(0xFFB9F6CA),
-            lightColor = Color(0xFF4CAF50),
-            baseColor = Color(0xFF2E7D32),
-            darkColor = Color(0xFF1B5E20),
-            deepShadow = Color(0xFF003300)
-        )
-        PlayerColor.YELLOW -> PawnColorScheme(
-            highlightColor = Color(0xFFFFF59D),
-            lightColor = Color(0xFFFFD54F),
-            baseColor = Color(0xFFFBC02D),
-            darkColor = Color(0xFFF57F17),
-            deepShadow = Color(0xFF7F4000)
-        )
-        PlayerColor.BLUE -> PawnColorScheme(
-            highlightColor = Color(0xFF80D8FF),
-            lightColor = Color(0xFF42A5F5),
-            baseColor = Color(0xFF1976D2),
-            darkColor = Color(0xFF0D47A1),
-            deepShadow = Color(0xFF001F54)
-        )
-    }
-}
+// Precomputed static color schemes for 60-120fps draw performance
+private val pawnColorSchemes: Map<PlayerColor, PawnColorScheme> = mapOf(
+    PlayerColor.RED to PawnColorScheme(
+        highlightColor = Color(0xFFFF8A80),
+        lightColor = Color(0xFFFF5252),
+        baseColor = Color(0xFFD32F2F),
+        darkColor = Color(0xFFB71C1C),
+        deepShadow = Color(0xFF4A0000)
+    ),
+    PlayerColor.GREEN to PawnColorScheme(
+        highlightColor = Color(0xFFB9F6CA),
+        lightColor = Color(0xFF4CAF50),
+        baseColor = Color(0xFF2E7D32),
+        darkColor = Color(0xFF1B5E20),
+        deepShadow = Color(0xFF002900)
+    ),
+    PlayerColor.YELLOW to PawnColorScheme(
+        highlightColor = Color(0xFFFFF9C4),
+        lightColor = Color(0xFFFFD54F),
+        baseColor = Color(0xFFFBC02D),
+        darkColor = Color(0xFFF57F17),
+        deepShadow = Color(0xFF6D3600)
+    ),
+    PlayerColor.BLUE to PawnColorScheme(
+        highlightColor = Color(0xFFB3E5FC),
+        lightColor = Color(0xFF42A5F5),
+        baseColor = Color(0xFF1976D2),
+        darkColor = Color(0xFF0D47A1),
+        deepShadow = Color(0xFF00153B)
+    )
+)
 
 /**
- * Authentic 3D Classic Ludo Board with Realistic Turned-Wood / Gloss Plastic Gotis (Pawns).
- * Features:
- * - 3D Chess/Halma Pawn Anatomy: Stepped pedestal base, tapered waist stem, toroidal collar, and glossy spherical crown head
- * - Multi-stop radial and linear gradients for photorealistic 3D lighting
- * - Diffused optical ground shadow anchored to board surface
- * - 4 vibrant home bases with recessed socket bowls
- * - Crisp safe stars, center triangles, and directional arrows
+ * Authentic Photorealistic 3D Classic Ludo Board.
+ * Matches reference image with:
+ * - 3D Turned Wooden / Gloss Plastic Pawns firmly grounded with contact shadows & ambient occlusion
+ * - Deep sunken 3D socket saucers inside tinted pastel home bases
+ * - Luxurious golden beveled frame around the board
+ * - High-contrast directional lighting (top-left key light + bottom-right ambient bounce)
+ * - 60/120fps optimized rendering pipeline
  */
 @Composable
 fun LudoBoard(
@@ -105,7 +104,7 @@ fun LudoBoard(
 
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.20f,
+        targetValue = 1.18f,
         animationSpec = infiniteRepeatable(
             animation = tween(600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
@@ -125,7 +124,7 @@ fun LudoBoard(
                     if (info.playerId == currentPlayer.id && info.isValid) {
                         val dx = tapOffset.x - info.center.x
                         val dy = tapOffset.y - info.center.y
-                        val hitDistance = info.radius * 2.4f
+                        val hitDistance = info.radius * 2.5f
                         if (dx * dx + dy * dy <= hitDistance * hitDistance) {
                             onTokenClick(info.tokenId)
                             return@detectTapGestures
@@ -143,21 +142,21 @@ fun LudoBoard(
         val tokenList = mutableListOf<TokenRenderInfo>()
         val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex)
 
-        // 1. Clean Crisp Board Canvas Background
+        // 1. Board Shadow & Canvas Background
         drawRoundRect(
-            color = Color(0x28000000),
-            topLeft = Offset(offsetX + 3f, offsetY + 5f),
+            color = Color(0x35000000),
+            topLeft = Offset(offsetX + 3f, offsetY + 6f),
             size = Size(boardSize, boardSize),
-            cornerRadius = CornerRadius(cellSize * 0.45f)
+            cornerRadius = CornerRadius(cellSize * 0.50f)
         )
         drawRoundRect(
             color = Color.White,
             topLeft = Offset(offsetX, offsetY),
             size = Size(boardSize, boardSize),
-            cornerRadius = CornerRadius(cellSize * 0.45f)
+            cornerRadius = CornerRadius(cellSize * 0.50f)
         )
 
-        // 2. Four Classic Home Bases
+        // 2. Four Classic Home Bases with Tinted Pastel Platforms & Sunken Saucers
         drawHomeBase(
             offsetX, offsetY, cellSize, 0, 0, LudoRed, LudoRedLight,
             currentPlayer?.color == PlayerColor.RED, pulseAlpha
@@ -181,7 +180,7 @@ fun LudoBoard(
         // 4. Starting Squares
         drawStartingSquares(offsetX, offsetY, cellSize)
 
-        // 5. Safe Star Zones (4 Outlined Stars)
+        // 5. Safe Star Zones (Golden Stars)
         drawSafeZones(offsetX, offsetY, cellSize)
 
         // 6. Home Columns
@@ -196,14 +195,8 @@ fun LudoBoard(
         // 8. Center Home Triangles
         drawCenterHome(offsetX, offsetY, cellSize)
 
-        // 9. Outer Board Border Frame
-        drawRoundRect(
-            color = Color(0xFF212121),
-            topLeft = Offset(offsetX, offsetY),
-            size = Size(boardSize, boardSize),
-            cornerRadius = CornerRadius(cellSize * 0.45f),
-            style = Stroke(width = 2.5f)
-        )
+        // 9. Luxurious Golden Beveled Frame
+        drawGoldenBoardFrame(offsetX, offsetY, boardSize, cellSize)
 
         // 10. Collect Home Base Tokens
         for (player in gameState.players) {
@@ -312,7 +305,6 @@ fun LudoBoard(
             val to = gameState.animatingToPos
             val rawProgress = gameState.animatingHopProgress
 
-            // Smooth ease-in-out cosine interpolation for horizontal track trajectory
             val easedProgress = (1f - cos(rawProgress * Math.PI.toFloat())) / 2f
 
             val fromX = offsetX + from.second * cellSize + cellSize / 2
@@ -323,7 +315,6 @@ fun LudoBoard(
             val curGroundX = fromX + (toX - fromX) * easedProgress
             val curGroundY = fromY + (toY - fromY) * easedProgress
 
-            // Natural parabolic gravity arc for elevation
             val hopHeight = sin(rawProgress * Math.PI.toFloat()) * cellSize * 0.95f
             val elevatedY = curGroundY - hopHeight
             val elevatedScale = 1f + sin(rawProgress * Math.PI.toFloat()) * 0.20f
@@ -348,7 +339,7 @@ fun LudoBoard(
             }
         }
 
-        // 13. Draw All 3D Classic Pawns (Gotis)
+        // 13. Draw All Photorealistic 3D Gotis (Pawns)
         for (info in tokenList.sortedBy { if (it.isAnimating) 1 else 0 }) {
             draw3DClassicPawn(
                 center = info.center,
@@ -372,12 +363,12 @@ fun LudoBoard(
 
 /**
  * Renders an authentic, realistic 3D Classic Ludo Pawn (Goti).
- * True Halma/Chess Pawn structure matching reference:
- * 1. Stepped Pedestal Base Disc
- * 2. Tapered Waist Stem with Directional Lighting
- * 3. Toroidal Collar Ring
- * 4. Spherical Crown Head with 3D Radial Depth & Specular Shine
- * 5. Diffused Optical Ground Shadow
+ * True Halma/Chess Pawn structure with physical grounding:
+ * 1. Deep Ambient Occlusion Contact Shadow
+ * 2. Stepped Pedestal Base Disc
+ * 3. Tapered Waist Stem with Directional 5-stop Lighting
+ * 4. Toroidal Collar Ring
+ * 5. Spherical Crown Head with 3D Radial Depth & Specular Shine
  */
 private fun DrawScope.draw3DClassicPawn(
     center: Offset,
@@ -391,25 +382,26 @@ private fun DrawScope.draw3DClassicPawn(
     isAnimating: Boolean
 ) {
     val (cx, cy) = center.x to center.y
-    val colors = getPawnColors(playerColor)
+    val colors = pawnColorSchemes[playerColor] ?: pawnColorSchemes.values.first()
 
-    // 1. Realistic Optical Ground Shadow (Diffuses smoothly when hopping)
-    val baseShadowWidth = radius * 1.9f
-    val baseShadowHeight = radius * 0.75f
-    val groundY = groundCenter.y + radius * 0.32f
+    // 1. Realistic Optical Ground Shadow & Ambient Occlusion (Firmly Seated on Board)
+    val baseY = cy + radius * 0.26f
+    val baseWidth = radius * 1.80f
+    val baseHeight = radius * 0.72f
+    val groundY = groundCenter.y + radius * 0.26f
 
     if (isAnimating) {
         val shadowProgress = (hopHeight / (radius * 2.5f)).coerceIn(0f, 1f)
         val shadowScale = 1f + shadowProgress * 0.65f
-        val shadowAlpha = (0.35f * (1f - shadowProgress * 0.55f)).coerceIn(0.06f, 0.35f)
-        val shadowW = baseShadowWidth * shadowScale
-        val shadowH = baseShadowHeight * shadowScale
+        val shadowAlpha = (0.38f * (1f - shadowProgress * 0.55f)).coerceIn(0.06f, 0.38f)
+        val shadowW = baseWidth * shadowScale
+        val shadowH = baseHeight * shadowScale
 
         // Outer soft ambient diffusion
         drawOval(
-            color = Color.Black.copy(alpha = shadowAlpha * 0.40f),
-            topLeft = Offset(groundCenter.x - shadowW * 0.65f + 1f, groundY - shadowH * 0.65f + 2f),
-            size = Size(shadowW * 1.3f, shadowH * 1.3f)
+            color = Color.Black.copy(alpha = shadowAlpha * 0.35f),
+            topLeft = Offset(groundCenter.x - shadowW * 0.62f + 1f, groundY - shadowH * 0.60f + 2f),
+            size = Size(shadowW * 1.25f, shadowH * 1.25f)
         )
         // Inner contact shadow core
         drawOval(
@@ -418,16 +410,16 @@ private fun DrawScope.draw3DClassicPawn(
             size = Size(shadowW, shadowH)
         )
     } else {
-        // Resting Ground Shadow
+        // Deep Ambient Occlusion Ground Contact Shadow (Firmly glued to board surface)
         drawOval(
-            color = Color.Black.copy(alpha = 0.15f),
-            topLeft = Offset(groundCenter.x - baseShadowWidth * 0.60f + 1.5f, groundY - baseShadowHeight * 0.60f + 2.5f),
-            size = Size(baseShadowWidth * 1.2f, baseShadowHeight * 1.2f)
+            color = Color.Black.copy(alpha = 0.22f),
+            topLeft = Offset(groundCenter.x - baseWidth * 0.62f + 2f, groundY - baseHeight * 0.55f + 3f),
+            size = Size(baseWidth * 1.24f, baseHeight * 1.15f)
         )
         drawOval(
-            color = Color.Black.copy(alpha = 0.35f),
-            topLeft = Offset(groundCenter.x - baseShadowWidth / 2f + 1f, groundY - baseShadowHeight / 2f + 2f),
-            size = Size(baseShadowWidth, baseShadowHeight)
+            color = Color.Black.copy(alpha = 0.55f),
+            topLeft = Offset(groundCenter.x - baseWidth * 0.48f + 1f, groundY - baseHeight * 0.35f + 2f),
+            size = Size(baseWidth * 0.96f, baseHeight * 0.70f)
         )
     }
 
@@ -450,12 +442,8 @@ private fun DrawScope.draw3DClassicPawn(
         )
     }
 
-    // 3. Pawn Pedestal Base Disc
-    val baseY = cy + radius * 0.28f
-    val baseWidth = radius * 1.75f
-    val baseHeight = radius * 0.70f
-
-    // Base Lower Shadow & Dark Rim
+    // 3. Pawn Pedestal Base Disc (Stepped Circular Pedestal)
+    // Lower Rim Shadow & Deep Base Bevel
     drawOval(
         brush = Brush.verticalGradient(
             colors = listOf(colors.darkColor, colors.deepShadow),
@@ -466,42 +454,42 @@ private fun DrawScope.draw3DClassicPawn(
         size = Size(baseWidth, baseHeight + 2f)
     )
 
-    // Base Beveled Upper Disc
+    // Base Convex Upper Surface
     drawOval(
         brush = Brush.radialGradient(
-            colors = listOf(colors.lightColor, colors.baseColor, colors.darkColor),
-            center = Offset(cx - baseWidth * 0.2f, baseY - baseHeight * 0.2f),
+            colors = listOf(colors.highlightColor, colors.baseColor, colors.darkColor),
+            center = Offset(cx - baseWidth * 0.20f, baseY - baseHeight * 0.20f),
             radius = baseWidth * 0.75f
         ),
         topLeft = Offset(cx - baseWidth / 2, baseY - baseHeight / 2),
         size = Size(baseWidth, baseHeight)
     )
 
-    // Base Top Edge Specular Glint
+    // Base Top Edge Specular Bevel
     drawOval(
         color = Color.White.copy(alpha = 0.55f),
-        topLeft = Offset(cx - baseWidth * 0.42f, baseY - baseHeight * 0.45f),
-        size = Size(baseWidth * 0.84f, baseHeight * 0.35f),
-        style = Stroke(width = 1.4f)
+        topLeft = Offset(cx - baseWidth * 0.38f, baseY - baseHeight * 0.42f),
+        size = Size(baseWidth * 0.76f, baseHeight * 0.32f),
+        style = Stroke(width = 1.3f)
     )
 
     // 4. Pawn Tapered Waist / Stem
-    val neckY = cy - radius * 0.28f
-    val stemTopWidth = radius * 0.65f
-    val stemBottomWidth = radius * 1.25f
+    val neckY = cy - radius * 0.26f
+    val stemTopWidth = radius * 0.62f
+    val stemBottomWidth = radius * 1.22f
 
     val stemPath = Path().apply {
-        moveTo(cx - stemBottomWidth / 2, baseY - baseHeight * 0.25f)
+        moveTo(cx - stemBottomWidth / 2, baseY - baseHeight * 0.22f)
         cubicTo(
-            cx - stemBottomWidth * 0.35f, cy,
-            cx - stemTopWidth * 0.65f, neckY + radius * 0.15f,
+            cx - stemBottomWidth * 0.32f, cy,
+            cx - stemTopWidth * 0.60f, neckY + radius * 0.12f,
             cx - stemTopWidth / 2, neckY
         )
         lineTo(cx + stemTopWidth / 2, neckY)
         cubicTo(
-            cx + stemTopWidth * 0.65f, neckY + radius * 0.15f,
-            cx + stemBottomWidth * 0.35f, cy,
-            cx + stemBottomWidth / 2, baseY - baseHeight * 0.25f
+            cx + stemTopWidth * 0.60f, neckY + radius * 0.12f,
+            cx + stemBottomWidth * 0.32f, cy,
+            cx + stemBottomWidth / 2, baseY - baseHeight * 0.22f
         )
         close()
     }
@@ -540,22 +528,22 @@ private fun DrawScope.draw3DClassicPawn(
     )
 
     // 6. Spherical Crown Head (Sphere with 3D Gloss)
-    val headRadius = radius * 0.66f
+    val headRadius = radius * 0.68f
     val headCenter = Offset(cx, cy - radius * 0.58f)
 
     // Head Contact Drop Shadow on Collar
     drawCircle(
-        color = Color(0x35000000),
+        color = Color(0x40000000),
         radius = headRadius * 1.05f,
         center = Offset(headCenter.x + 0.8f, headCenter.y + 2f)
     )
 
-    // 3D Sphere Body with Spherical Radial Gradient
+    // 3D Sphere Body with Radial Gradient
     drawCircle(
         brush = Brush.radialGradient(
             colors = listOf(colors.highlightColor, colors.lightColor, colors.baseColor, colors.darkColor, colors.deepShadow),
-            center = Offset(headCenter.x - headRadius * 0.35f, headCenter.y - headRadius * 0.35f),
-            radius = headRadius * 1.25f
+            center = Offset(headCenter.x - headRadius * 0.38f, headCenter.y - headRadius * 0.38f),
+            radius = headRadius * 1.30f
         ),
         radius = headRadius,
         center = headCenter
@@ -563,21 +551,21 @@ private fun DrawScope.draw3DClassicPawn(
 
     // High-Gloss Specular Highlight (Primary bright crescent glint)
     drawOval(
-        color = Color.White.copy(alpha = 0.85f),
-        topLeft = Offset(headCenter.x - headRadius * 0.58f, headCenter.y - headRadius * 0.65f),
-        size = Size(headRadius * 0.55f, headRadius * 0.40f)
+        color = Color.White.copy(alpha = 0.88f),
+        topLeft = Offset(headCenter.x - headRadius * 0.60f, headCenter.y - headRadius * 0.66f),
+        size = Size(headRadius * 0.56f, headRadius * 0.42f)
     )
 
     // Secondary Micro Specular Dot
     drawCircle(
         color = Color.White,
         radius = headRadius * 0.14f,
-        center = Offset(headCenter.x - headRadius * 0.42f, headCenter.y - headRadius * 0.46f)
+        center = Offset(headCenter.x - headRadius * 0.44f, headCenter.y - headRadius * 0.48f)
     )
 
-    // Subtle Rim Light on Lower-Right Edge (Reflected Ambient Light)
+    // Reflected Ambient Rim Light on Lower-Right Edge
     drawArc(
-        color = colors.lightColor.copy(alpha = 0.45f),
+        color = colors.lightColor.copy(alpha = 0.50f),
         startAngle = 30f,
         sweepAngle = 100f,
         useCenter = false,
@@ -607,7 +595,7 @@ private fun DrawScope.drawHomeBase(
     // Active Player Turn Halo
     if (isCurrentPlayer) {
         drawRoundRect(
-            color = color.copy(alpha = pulseAlpha * 0.6f),
+            color = color.copy(alpha = pulseAlpha * 0.65f),
             topLeft = Offset(x - 3f, y - 3f),
             size = Size(homeSize + 6f, homeSize + 6f),
             cornerRadius = CornerRadius(cellSize * 0.45f),
@@ -615,18 +603,25 @@ private fun DrawScope.drawHomeBase(
         )
     }
 
-    // Inner White Platform
+    // Inner Tinted Platform (Matches reference image)
     val innerMargin = cellSize * 0.85f
     val innerSize = homeSize - innerMargin * 2
     drawRoundRect(
-        color = Color.White,
+        color = lightColor,
         topLeft = Offset(x + innerMargin, y + innerMargin),
         size = Size(innerSize, innerSize),
         cornerRadius = CornerRadius(cellSize * 0.38f)
     )
+    drawRoundRect(
+        color = color.copy(alpha = 0.25f),
+        topLeft = Offset(x + innerMargin, y + innerMargin),
+        size = Size(innerSize, innerSize),
+        cornerRadius = CornerRadius(cellSize * 0.38f),
+        style = Stroke(width = 1.8f)
+    )
 
-    // 4 Sunken Goti Nest Bowls
-    val spotRadius = cellSize * 0.46f
+    // 4 Sunken 3D Socket Saucers
+    val spotRadius = cellSize * 0.52f
     val spotCenters = listOf(
         Offset(x + 1.5f * cellSize, y + 1.5f * cellSize),
         Offset(x + 4.5f * cellSize, y + 1.5f * cellSize),
@@ -635,15 +630,62 @@ private fun DrawScope.drawHomeBase(
     )
 
     spotCenters.forEach { center ->
-        // Outer socket shadow
-        drawCircle(color = Color(0x20000000), radius = spotRadius * 1.08f, center = Offset(center.x + 0.8f, center.y + 1f))
-        // Colored socket rim
-        drawCircle(color = color.copy(alpha = 0.30f), radius = spotRadius, center = center)
-        drawCircle(color = color, radius = spotRadius, center = center, style = Stroke(width = 3.0f))
-        // Inner nest bed
-        drawCircle(color = lightColor.copy(alpha = 0.30f), radius = spotRadius * 0.72f, center = center)
-        drawCircle(color = color.copy(alpha = 0.50f), radius = spotRadius * 0.72f, center = center, style = Stroke(width = 1.2f))
+        // Deep cast shadow inside the well
+        drawCircle(
+            brush = Brush.radialGradient(
+                colors = listOf(Color.Transparent, Color(0x35000000), Color(0x60000000)),
+                center = Offset(center.x - spotRadius * 0.2f, center.y - spotRadius * 0.2f),
+                radius = spotRadius
+            ),
+            radius = spotRadius,
+            center = center
+        )
+        // Outer beveled socket rim
+        drawCircle(
+            color = color.copy(alpha = 0.85f),
+            radius = spotRadius,
+            center = center,
+            style = Stroke(width = 3.2f)
+        )
+        // Inner sunken saucer floor
+        drawCircle(
+            color = color.copy(alpha = 0.18f),
+            radius = spotRadius * 0.82f,
+            center = center
+        )
+        // Highlight on lower-right rim
+        drawArc(
+            color = Color.White.copy(alpha = 0.65f),
+            startAngle = 45f,
+            sweepAngle = 90f,
+            useCenter = false,
+            topLeft = Offset(center.x - spotRadius, center.y - spotRadius),
+            size = Size(spotRadius * 2, spotRadius * 2),
+            style = Stroke(width = 1.6f)
+        )
     }
+}
+
+private fun DrawScope.drawGoldenBoardFrame(offsetX: Float, offsetY: Float, boardSize: Float, cellSize: Float) {
+    // Outer Luxurious Golden Bevel Frame
+    drawRoundRect(
+        brush = Brush.linearGradient(
+            colors = listOf(Color(0xFF8D6E14), Color(0xFFF9D976), Color(0xFFD4AF37), Color(0xFF8D6E14)),
+            start = Offset(offsetX, offsetY),
+            end = Offset(offsetX + boardSize, offsetY + boardSize)
+        ),
+        topLeft = Offset(offsetX - 2f, offsetY - 2f),
+        size = Size(boardSize + 4f, boardSize + 4f),
+        cornerRadius = CornerRadius(cellSize * 0.50f),
+        style = Stroke(width = 4.0f)
+    )
+    drawRoundRect(
+        color = Color(0xFF5D4037),
+        topLeft = Offset(offsetX, offsetY),
+        size = Size(boardSize, boardSize),
+        cornerRadius = CornerRadius(cellSize * 0.50f),
+        style = Stroke(width = 1.5f)
+    )
 }
 
 
@@ -768,14 +810,14 @@ private fun DrawScope.drawDirectionArrow(cx: Float, cy: Float, size: Float, colo
 }
 
 private fun DrawScope.drawSafeZones(offsetX: Float, offsetY: Float, cellSize: Float) {
-    // 4 Classic Safe Spot Stars (Outlined Star with White Interior matching reference)
+    // 4 Classic Safe Spot Stars (Golden Stars matching reference image)
     val starIndices = listOf(8, 21, 34, 47)
     for (index in starIndices) {
         val (row, col) = BoardConfig.mainTrack[index]
         val cx = offsetX + col * cellSize + cellSize / 2
         val cy = offsetY + row * cellSize + cellSize / 2
 
-        drawStar(cx, cy, cellSize * 0.36f, Color.White, Color(0xFF424242))
+        drawStar(cx, cy, cellSize * 0.36f, Color(0xFFFFD54F), Color(0xFF8D6E14))
     }
 }
 
