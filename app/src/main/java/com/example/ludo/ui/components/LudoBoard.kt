@@ -468,10 +468,10 @@ private fun DrawScope.drawHomeBase(
     // 4 Sunken Goti Nests
     val spotRadius = cellSize * 0.46f
     val spotCenters = listOf(
-        Offset(x + homeSize * 0.32f, y + homeSize * 0.32f),
-        Offset(x + homeSize * 0.68f, y + homeSize * 0.32f),
-        Offset(x + homeSize * 0.32f, y + homeSize * 0.68f),
-        Offset(x + homeSize * 0.68f, y + homeSize * 0.68f),
+        Offset(x + 1.5f * cellSize, y + 1.5f * cellSize),
+        Offset(x + 4.5f * cellSize, y + 1.5f * cellSize),
+        Offset(x + 1.5f * cellSize, y + 4.5f * cellSize),
+        Offset(x + 4.5f * cellSize, y + 4.5f * cellSize),
     )
 
     spotCenters.forEach { center ->

@@ -33,9 +33,9 @@ object BoardConfig {
     val safePositions = safeSpotsIndices.map { mainTrack[it] }
 
     val homePositions = mapOf(
-        0 to listOf(Pair(2,2), Pair(2,3), Pair(3,2), Pair(3,3)),
-        1 to listOf(Pair(2,11), Pair(2,12), Pair(3,11), Pair(3,12)),
-        2 to listOf(Pair(11,11), Pair(11,12), Pair(12,11), Pair(12,12)),
-        3 to listOf(Pair(11,2), Pair(11,3), Pair(12,2), Pair(12,3))
+        0 to listOf(Pair(1, 1), Pair(1, 4), Pair(4, 1), Pair(4, 4)),
+        1 to listOf(Pair(1, 10), Pair(1, 13), Pair(4, 10), Pair(4, 13)),
+        2 to listOf(Pair(10, 10), Pair(10, 13), Pair(13, 10), Pair(13, 13)),
+        3 to listOf(Pair(10, 1), Pair(10, 4), Pair(13, 1), Pair(13, 4))
     )
 }
