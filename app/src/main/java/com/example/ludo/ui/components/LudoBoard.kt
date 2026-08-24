@@ -7,6 +7,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -17,6 +18,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.example.ludo.engine.BoardConfig
 import com.example.ludo.model.*
 import com.example.ludo.theme.*
+import kotlin.math.asin
+import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
@@ -34,8 +37,13 @@ private data class TokenRenderInfo(
 )
 
 /**
- * Classic Authentic Ludo Board with 3D Tactile Gotis (Pawns).
- * Clean, modern, symmetrical 15x15 board with smooth physics-based token hops.
+ * Authentic Clean Ludo Board with iconic White & Jewel-Colored Map-Pin Gotis.
+ * Exact replication of classic mobile board styling:
+ * - 4 vibrant home bases with dynamic empty/occupied socket beds
+ * - 4 center triangles meeting at center apex
+ * - 4 safe-spot outlined stars
+ * - 4 directional entry arrows
+ * - Iconic teardrop / map-pin gotis with ground anchor rings and realistic drop shadows
  */
 @Composable
 fun LudoBoard(
@@ -77,7 +85,7 @@ fun LudoBoard(
                     if (info.playerId == currentPlayer.id && info.isValid) {
                         val dx = tapOffset.x - info.center.x
                         val dy = tapOffset.y - info.center.y
-                        val hitDistance = info.radius * 2.2f
+                        val hitDistance = info.radius * 2.4f
                         if (dx * dx + dy * dy <= hitDistance * hitDistance) {
                             onTokenClick(info.tokenId)
                             return@detectTapGestures
@@ -95,25 +103,41 @@ fun LudoBoard(
         val tokenList = mutableListOf<TokenRenderInfo>()
         val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex)
 
-        // 1. Board Drop Shadow & Wooden Base Frame
+        // 1. Clean Crisp Board Canvas Background
         drawRoundRect(
-            color = Color(0x38000000),
-            topLeft = Offset(offsetX + 4f, offsetY + 6f),
+            color = Color(0x28000000),
+            topLeft = Offset(offsetX + 3f, offsetY + 5f),
             size = Size(boardSize, boardSize),
             cornerRadius = CornerRadius(cellSize * 0.45f)
         )
         drawRoundRect(
-            color = Color(0xFFFDFBF7),
+            color = Color.White,
             topLeft = Offset(offsetX, offsetY),
             size = Size(boardSize, boardSize),
             cornerRadius = CornerRadius(cellSize * 0.45f)
         )
 
-        // 2. Four Classic Home Bases
-        drawHomeBase(offsetX, offsetY, cellSize, 0, 0, LudoRed, LudoRedLight, currentPlayer?.color == PlayerColor.RED, pulseAlpha)
-        drawHomeBase(offsetX, offsetY, cellSize, 0, 9, LudoGreen, LudoGreenLight, currentPlayer?.color == PlayerColor.GREEN, pulseAlpha)
-        drawHomeBase(offsetX, offsetY, cellSize, 9, 9, LudoYellow, LudoYellowLight, currentPlayer?.color == PlayerColor.YELLOW, pulseAlpha)
-        drawHomeBase(offsetX, offsetY, cellSize, 9, 0, LudoBlue, LudoBlueLight, currentPlayer?.color == PlayerColor.BLUE, pulseAlpha)
+        // 2. Four Classic Home Bases with dynamic empty socket fills
+        drawHomeBase(
+            offsetX, offsetY, cellSize, 0, 0, LudoRed,
+            currentPlayer?.color == PlayerColor.RED, pulseAlpha,
+            playerTokens = gameState.players.firstOrNull { it.color == PlayerColor.RED }?.tokens ?: emptyList()
+        )
+        drawHomeBase(
+            offsetX, offsetY, cellSize, 0, 9, LudoGreen,
+            currentPlayer?.color == PlayerColor.GREEN, pulseAlpha,
+            playerTokens = gameState.players.firstOrNull { it.color == PlayerColor.GREEN }?.tokens ?: emptyList()
+        )
+        drawHomeBase(
+            offsetX, offsetY, cellSize, 9, 9, LudoYellow,
+            currentPlayer?.color == PlayerColor.YELLOW, pulseAlpha,
+            playerTokens = gameState.players.firstOrNull { it.color == PlayerColor.YELLOW }?.tokens ?: emptyList()
+        )
+        drawHomeBase(
+            offsetX, offsetY, cellSize, 9, 0, LudoBlue,
+            currentPlayer?.color == PlayerColor.BLUE, pulseAlpha,
+            playerTokens = gameState.players.firstOrNull { it.color == PlayerColor.BLUE }?.tokens ?: emptyList()
+        )
 
         // 3. Track Cells (52 Squares)
         drawTrackCells(offsetX, offsetY, cellSize)
@@ -121,28 +145,31 @@ fun LudoBoard(
         // 4. Starting Squares
         drawStartingSquares(offsetX, offsetY, cellSize)
 
-        // 5. Safe Star Zones
+        // 5. Safe Star Zones (4 Stars with clean dark outlines and white interior)
         drawSafeZones(offsetX, offsetY, cellSize)
 
-        // 6. Home Columns
+        // 6. Home Columns (Solid Player Colored Paths into Center)
         drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.redHomeColumn, LudoRed)
         drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.greenHomeColumn, LudoGreen)
         drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.yellowHomeColumn, LudoYellow)
         drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.blueHomeColumn, LudoBlue)
 
-        // 7. Center Home Triangles & Golden Trophy Star
+        // 7. Directional Arrows on Track
+        drawTrackArrows(offsetX, offsetY, cellSize)
+
+        // 8. Center Home Triangles (Clean 4 Triangles Meeting at Apex)
         drawCenterHome(offsetX, offsetY, cellSize)
 
-        // 8. Outer Mahogany Wood Border Frame
+        // 9. Outer Board Border Frame
         drawRoundRect(
-            color = Color(0xFF4E342E),
+            color = Color(0xFF212121),
             topLeft = Offset(offsetX, offsetY),
             size = Size(boardSize, boardSize),
             cornerRadius = CornerRadius(cellSize * 0.45f),
-            style = Stroke(width = 4f)
+            style = Stroke(width = 2.5f)
         )
 
-        // 9. Collect Home Base Tokens
+        // 10. Collect Home Base Tokens
         for (player in gameState.players) {
             val colorOrdinal = player.color.ordinal
             for (token in player.tokens) {
@@ -153,7 +180,7 @@ fun LudoBoard(
                         val cy = offsetY + homePos.first * cellSize + cellSize / 2
                         val isCurr = player.id == currentPlayer?.id
                         val isValid = isCurr && gameState.validMoves.contains(token.id) && gameState.gamePhase == GamePhase.WAITING_FOR_MOVE
-                        val radius = cellSize * 0.40f
+                        val radius = cellSize * 0.44f
 
                         tokenList.add(
                             TokenRenderInfo(
@@ -171,7 +198,7 @@ fun LudoBoard(
             }
         }
 
-        // 10. Collect Board Tokens with Stacking
+        // 11. Collect Board Tokens with Stacking
         val boardTokensByCell = mutableMapOf<Pair<Int, Int>, MutableList<Pair<Player, Token>>>()
         for (player in gameState.players) {
             for (token in player.tokens) {
@@ -195,27 +222,27 @@ fun LudoBoard(
                 }
 
                 val (offsetXShift, offsetYShift, tokenRadius) = when (count) {
-                    1 -> Triple(0f, 0f, cellSize * 0.40f)
+                    1 -> Triple(0f, 0f, cellSize * 0.44f)
                     2 -> {
                         val d = cellSize * 0.16f
-                        if (index == 0) Triple(-d, -d, cellSize * 0.28f)
-                        else Triple(d, d, cellSize * 0.28f)
+                        if (index == 0) Triple(-d, -d, cellSize * 0.32f)
+                        else Triple(d, d, cellSize * 0.32f)
                     }
                     3 -> {
                         val d = cellSize * 0.16f
                         when (index) {
-                            0 -> Triple(0f, -d, cellSize * 0.24f)
-                            1 -> Triple(-d, d * 0.9f, cellSize * 0.24f)
-                            else -> Triple(d, d * 0.9f, cellSize * 0.24f)
+                            0 -> Triple(0f, -d, cellSize * 0.28f)
+                            1 -> Triple(-d, d * 0.9f, cellSize * 0.28f)
+                            else -> Triple(d, d * 0.9f, cellSize * 0.28f)
                         }
                     }
                     else -> {
                         val d = cellSize * 0.18f
                         when (index % 4) {
-                            0 -> Triple(-d, -d, cellSize * 0.22f)
-                            1 -> Triple(d, -d, cellSize * 0.22f)
-                            2 -> Triple(-d, d, cellSize * 0.22f)
-                            else -> Triple(d, d, cellSize * 0.22f)
+                            0 -> Triple(-d, -d, cellSize * 0.24f)
+                            1 -> Triple(d, -d, cellSize * 0.24f)
+                            2 -> Triple(-d, d, cellSize * 0.24f)
+                            else -> Triple(d, d, cellSize * 0.24f)
                         }
                     }
                 }
@@ -239,7 +266,7 @@ fun LudoBoard(
             }
         }
 
-        // 11. Smooth Parabolic Hop Animation
+        // 12. Smooth Parabolic Hop Animation
         if (gameState.animatingPlayerId != null && gameState.animatingTokenId != null &&
             gameState.animatingFromPos != null && gameState.animatingToPos != null) {
 
@@ -257,7 +284,7 @@ fun LudoBoard(
             val hopHeight = sin(progress * Math.PI).toFloat() * cellSize * 0.85f
             val elevatedY = curY - hopHeight
             val elevatedScale = 1f + sin(progress * Math.PI).toFloat() * 0.32f
-            val tokenRadius = cellSize * 0.40f * elevatedScale
+            val tokenRadius = cellSize * 0.44f * elevatedScale
 
             val player = gameState.players.firstOrNull { it.id == gameState.animatingPlayerId }
             if (player != null) {
@@ -278,9 +305,9 @@ fun LudoBoard(
             }
         }
 
-        // 12. Draw All 3D Gotis (Pawns)
+        // 13. Draw All Pin Gotis (Pawns)
         for (info in tokenList.sortedBy { if (it.isAnimating) 1 else 0 }) {
-            draw3DGoti(
+            drawPinGoti(
                 center = info.center,
                 radius = info.radius,
                 color = getPlayerColor(info.playerColor),
@@ -301,16 +328,16 @@ fun LudoBoard(
 }
 
 /**
- * Renders a tactile, classic & modern 3D Ludo Goti (Pawn).
- * Anatomical layers:
- * 1. Ground contact shadow
- * 2. Flared pedestal base with bevel rim
- * 3. Tapered waist/collar
- * 4. Domed spherical crown head
- * 5. High-gloss specular reflections
- * 6. Active glowing pulse halo when valid to move
+ * Renders the iconic White & Jewel-Colored Map-Pin Goti (Pawn).
+ * Features:
+ * - Base anchor ring on the cell with subtle shadow
+ * - Soft drop shadow cast to bottom-right
+ * - White teardrop / map-pin body with beveled outline
+ * - Jewel colored circular core inside the pin head
+ * - Specular gloss highlight
+ * - Golden pulsing halo when valid to move
  */
-private fun DrawScope.draw3DGoti(
+private fun DrawScope.drawPinGoti(
     center: Offset,
     radius: Float,
     color: Color,
@@ -323,118 +350,115 @@ private fun DrawScope.draw3DGoti(
 ) {
     val (cx, cy) = center.x to center.y
 
-    // 1. Selectable Active Glowing Pulsing Halo
+    // 1. Pulsing Halo when Valid to Move
     if (isValid) {
         drawCircle(
             color = color.copy(alpha = pulseAlpha * 0.55f),
             radius = radius * pulseScale * 1.55f,
-            center = Offset(cx, cy)
+            center = Offset(cx, cy - radius * 0.15f)
         )
         drawCircle(
             color = Color.White.copy(alpha = pulseAlpha * 0.95f),
             radius = radius * pulseScale * 1.25f,
-            center = Offset(cx, cy),
+            center = Offset(cx, cy - radius * 0.15f),
             style = Stroke(width = 2.4f)
         )
     }
 
-    // 2. Soft Ground Contact Shadow (Expands during air hop)
-    val shadowWidth = radius * 1.9f * shadowRadius
-    val shadowHeight = radius * 0.75f * shadowRadius
-    drawOval(
-        color = Color(0x3D000000),
-        topLeft = Offset(cx - shadowWidth / 2 + shadowOffset.x, cy + radius * 0.35f + shadowOffset.y),
-        size = Size(shadowWidth, shadowHeight)
-    )
-
-    // 3. Flared Pedestal Base Disc
-    val baseCenter = Offset(cx, cy + radius * 0.22f)
-    val baseRadius = radius * 0.95f
-
-    // Outer Dark Bevel Rim
+    // 2. Base Contact Ring on Board
+    val groundCenter = Offset(cx, cy + radius * 0.42f)
     drawCircle(
         color = Color(0x33000000),
-        radius = baseRadius,
-        center = Offset(baseCenter.x + 0.8f, baseCenter.y + 1.2f)
+        radius = radius * 0.62f,
+        center = Offset(groundCenter.x + 1f, groundCenter.y + 1.2f)
     )
-    // White Base Ring Accent
     drawCircle(
         color = Color.White,
-        radius = baseRadius,
-        center = baseCenter
+        radius = radius * 0.58f,
+        center = groundCenter
     )
-    // Base Disc Body
     drawCircle(
         color = color,
-        radius = baseRadius * 0.88f,
-        center = baseCenter
-    )
-    // Base Top Edge Specular Rim
-    drawCircle(
-        color = Color.White.copy(alpha = 0.45f),
-        radius = baseRadius * 0.88f,
-        center = baseCenter,
-        style = Stroke(width = 1.5f)
+        radius = radius * 0.48f,
+        center = groundCenter,
+        style = Stroke(width = 2.4f)
     )
 
-    // 4. Domed Spherical Crown Head (Offset upward for 3D standing perspective)
-    val headCenter = Offset(cx, cy - radius * 0.18f)
-    val headRadius = radius * 0.64f
+    // 3. Pin Geometry Definition
+    val pinHeadRadius = radius * 0.62f
+    val pinHeadCenter = Offset(cx, cy - radius * 0.28f)
+    val pinTip = Offset(cx, cy + radius * 0.45f)
 
-    // Head Shadow Drop onto Base
-    drawCircle(
-        color = Color(0x30000000),
-        radius = headRadius * 1.08f,
-        center = Offset(headCenter.x + 0.8f, headCenter.y + 1.4f)
+    fun createPinPath(headCenter: Offset, tip: Offset, r: Float): Path {
+        val path = Path()
+        val dy = tip.y - headCenter.y
+        val clampedRatio = (r / dy).coerceIn(0f, 1f).toDouble()
+        val angleDeg = Math.toDegrees(asin(clampedRatio)).toFloat()
+
+        val leftTangentX = headCenter.x - r * cos(Math.toRadians((90.0 - angleDeg))).toFloat()
+        val leftTangentY = headCenter.y + r * sin(Math.toRadians((90.0 - angleDeg))).toFloat()
+        val rightTangentX = headCenter.x + r * cos(Math.toRadians((90.0 - angleDeg))).toFloat()
+        val rightTangentY = headCenter.y + r * sin(Math.toRadians((90.0 - angleDeg))).toFloat()
+
+        path.moveTo(tip.x, tip.y)
+        path.lineTo(leftTangentX, leftTangentY)
+        path.arcTo(
+            rect = Rect(
+                left = headCenter.x - r,
+                top = headCenter.y - r,
+                right = headCenter.x + r,
+                bottom = headCenter.y + r
+            ),
+            startAngleDegrees = 180f - angleDeg,
+            sweepAngleDegrees = 180f + 2f * angleDeg,
+            forceMoveTo = false
+        )
+        path.lineTo(tip.x, tip.y)
+        path.close()
+        return path
+    }
+
+    // 4. Drop Shadow of the Pin
+    val shadowPath = createPinPath(
+        headCenter = Offset(pinHeadCenter.x + shadowOffset.x, pinHeadCenter.y + shadowOffset.y),
+        tip = Offset(pinTip.x + shadowOffset.x, pinTip.y + shadowOffset.y),
+        r = pinHeadRadius * shadowRadius
     )
+    drawPath(shadowPath, color = Color(0x38000000), style = Fill)
 
-    // White Head Border
-    drawCircle(
-        color = Color.White,
-        radius = headRadius * 1.06f,
-        center = headCenter
-    )
+    // 5. White Outer Pin Shell
+    val pinPath = createPinPath(pinHeadCenter, pinTip, pinHeadRadius)
+    drawPath(pinPath, color = Color.White, style = Fill)
+    drawPath(pinPath, color = Color(0xFF757575), style = Stroke(width = 1.6f))
 
-    // 3D Saturated Jewel Head Body
+    // 6. Colored Inner Circle in Pin Head
+    val innerColorRadius = pinHeadRadius * 0.65f
     drawCircle(
         color = color,
-        radius = headRadius,
-        center = headCenter
+        radius = innerColorRadius,
+        center = pinHeadCenter
+    )
+    drawCircle(
+        color = Color(0x22000000),
+        radius = innerColorRadius,
+        center = pinHeadCenter,
+        style = Stroke(width = 1.2f)
     )
 
-    // Inner Metallic Crown Ring
+    // 7. Specular Gloss Highlight
+    val glossCenter = Offset(pinHeadCenter.x - innerColorRadius * 0.28f, pinHeadCenter.y - innerColorRadius * 0.28f)
     drawCircle(
-        color = Color.White.copy(alpha = 0.65f),
-        radius = headRadius * 0.48f,
-        center = headCenter,
-        style = Stroke(width = 1.6f)
-    )
-
-    // Center Jewel Accent Dot
-    drawCircle(
-        color = Color.White,
-        radius = headRadius * 0.18f,
-        center = headCenter
-    )
-
-    // Top-Left Primary Specular Gloss Highlight
-    val glossCenter = Offset(headCenter.x - headRadius * 0.30f, headCenter.y - headRadius * 0.30f)
-    drawCircle(
-        color = Color.White.copy(alpha = 0.80f),
-        radius = headRadius * 0.32f,
+        color = Color.White.copy(alpha = 0.55f),
+        radius = innerColorRadius * 0.35f,
         center = glossCenter
-    )
-    drawCircle(
-        color = Color.White,
-        radius = headRadius * 0.15f,
-        center = Offset(glossCenter.x - headRadius * 0.05f, glossCenter.y - headRadius * 0.05f)
     )
 }
 
 private fun DrawScope.drawHomeBase(
     offsetX: Float, offsetY: Float, cellSize: Float,
-    startRow: Int, startCol: Int, color: Color, lightColor: Color,
-    isCurrentPlayer: Boolean, pulseAlpha: Float
+    startRow: Int, startCol: Int, color: Color,
+    isCurrentPlayer: Boolean, pulseAlpha: Float,
+    playerTokens: List<Token>
 ) {
     val x = offsetX + startCol * cellSize
     val y = offsetY + startRow * cellSize
@@ -469,23 +493,31 @@ private fun DrawScope.drawHomeBase(
         cornerRadius = CornerRadius(cellSize * 0.38f)
     )
 
-    // 4 Sunken Goti Nests
+    // 4 Sockets (Dynamic Empty vs Occupied Socket Appearance)
     val spotRadius = cellSize * 0.46f
-    val spotCenters = listOf(
-        Offset(x + 1.5f * cellSize, y + 1.5f * cellSize),
-        Offset(x + 4.5f * cellSize, y + 1.5f * cellSize),
-        Offset(x + 1.5f * cellSize, y + 4.5f * cellSize),
-        Offset(x + 4.5f * cellSize, y + 4.5f * cellSize),
+    val spotPositions = listOf(
+        0 to Offset(x + 1.5f * cellSize, y + 1.5f * cellSize),
+        1 to Offset(x + 4.5f * cellSize, y + 1.5f * cellSize),
+        2 to Offset(x + 1.5f * cellSize, y + 4.5f * cellSize),
+        3 to Offset(x + 4.5f * cellSize, y + 4.5f * cellSize)
     )
 
-    spotCenters.forEach { center ->
+    spotPositions.forEach { (tokenId, center) ->
+        val isTokenInHome = playerTokens.firstOrNull { it.id == tokenId }?.state == TokenState.IN_HOME
+
         // Outer socket shadow
         drawCircle(color = Color(0x18000000), radius = spotRadius * 1.08f, center = Offset(center.x + 0.8f, center.y + 1f))
         // Colored socket rim
         drawCircle(color = color.copy(alpha = 0.25f), radius = spotRadius, center = center)
         drawCircle(color = color, radius = spotRadius, center = center, style = Stroke(width = 2.5f))
-        // White inner nest bed
-        drawCircle(color = Color.White, radius = spotRadius * 0.65f, center = center)
+
+        if (isTokenInHome) {
+            // White socket bed for occupied token
+            drawCircle(color = Color.White, radius = spotRadius * 0.65f, center = center)
+        } else {
+            // Solid player color for empty socket (matches reference image)
+            drawCircle(color = color, radius = spotRadius * 0.82f, center = center)
+        }
     }
 }
 
@@ -501,7 +533,7 @@ private fun DrawScope.drawTrackCells(offsetX: Float, offsetY: Float, cellSize: F
             size = Size(cellSize, cellSize)
         )
         drawRect(
-            color = Color(0xFFE2D9CC),
+            color = Color(0xFFCFD8DC),
             topLeft = Offset(x, y),
             size = Size(cellSize, cellSize),
             style = Stroke(width = 1f)
@@ -511,12 +543,12 @@ private fun DrawScope.drawTrackCells(offsetX: Float, offsetY: Float, cellSize: F
 
 private fun DrawScope.drawStartingSquares(offsetX: Float, offsetY: Float, cellSize: Float) {
     val starts = listOf(
-        Triple(BoardConfig.RED_START_INDEX, LudoRed, "↓"),
-        Triple(BoardConfig.GREEN_START_INDEX, LudoGreen, "→"),
-        Triple(BoardConfig.YELLOW_START_INDEX, LudoYellow, "↑"),
-        Triple(BoardConfig.BLUE_START_INDEX, LudoBlue, "←")
+        Pair(BoardConfig.RED_START_INDEX, LudoRed),
+        Pair(BoardConfig.GREEN_START_INDEX, LudoGreen),
+        Pair(BoardConfig.YELLOW_START_INDEX, LudoYellow),
+        Pair(BoardConfig.BLUE_START_INDEX, LudoBlue)
     )
-    for ((index, color, _) in starts) {
+    for ((index, color) in starts) {
         val (row, col) = BoardConfig.mainTrack[index]
         val x = offsetX + col * cellSize
         val y = offsetY + row * cellSize
@@ -527,7 +559,7 @@ private fun DrawScope.drawStartingSquares(offsetX: Float, offsetY: Float, cellSi
             size = Size(cellSize, cellSize)
         )
         drawRect(
-            color = Color(0xFFE0E0E0),
+            color = Color(0xFFB0BEC5),
             topLeft = Offset(x, y),
             size = Size(cellSize, cellSize),
             style = Stroke(width = 1.2f)
@@ -557,20 +589,67 @@ private fun DrawScope.drawHomeColumn(
     }
 }
 
+private fun DrawScope.drawTrackArrows(offsetX: Float, offsetY: Float, cellSize: Float) {
+    val arrows = listOf(
+        Triple(Pair(7, 0), LudoRed, 0f),       // Red arrow pointing Right →
+        Triple(Pair(0, 7), LudoGreen, 90f),    // Green arrow pointing Down ↓
+        Triple(Pair(7, 14), LudoYellow, 180f), // Yellow arrow pointing Left ←
+        Triple(Pair(14, 7), LudoBlue, 270f)    // Blue arrow pointing Up ↑
+    )
+
+    arrows.forEach { (pos, color, angleDeg) ->
+        val (row, col) = pos
+        val cx = offsetX + col * cellSize + cellSize / 2
+        val cy = offsetY + row * cellSize + cellSize / 2
+
+        drawDirectionArrow(cx, cy, cellSize * 0.45f, color, angleDeg)
+    }
+}
+
+private fun DrawScope.drawDirectionArrow(cx: Float, cy: Float, size: Float, color: Color, angleDeg: Float) {
+    val path = Path()
+    val half = size / 2
+
+    // Arrow pointing Right (0 deg)
+    val tipX = half
+    val tipY = 0f
+    val backX = -half
+    val topY = -half * 0.7f
+    val botY = half * 0.7f
+
+    val rad = Math.toRadians(angleDeg.toDouble())
+    val cosA = cos(rad).toFloat()
+    val sinA = sin(rad).toFloat()
+
+    fun rotatePoint(px: Float, py: Float): Offset {
+        val rx = px * cosA - py * sinA
+        val ry = px * sinA + py * cosA
+        return Offset(cx + rx, cy + ry)
+    }
+
+    val pTip = rotatePoint(tipX, tipY)
+    val pTop = rotatePoint(backX, topY)
+    val pBot = rotatePoint(backX, botY)
+    val pMid = rotatePoint(backX * 0.4f, 0f)
+
+    path.moveTo(pTip.x, pTip.y)
+    path.lineTo(pTop.x, pTop.y)
+    path.lineTo(pMid.x, pMid.y)
+    path.lineTo(pBot.x, pBot.y)
+    path.close()
+
+    drawPath(path, color = color, style = Fill)
+}
+
 private fun DrawScope.drawSafeZones(offsetX: Float, offsetY: Float, cellSize: Float) {
-    for (index in BoardConfig.safeSpotsIndices) {
+    // 4 Classic Safe Spot Stars (Outlined Star with White Interior matching reference)
+    val starIndices = listOf(8, 21, 34, 47)
+    for (index in starIndices) {
         val (row, col) = BoardConfig.mainTrack[index]
         val cx = offsetX + col * cellSize + cellSize / 2
         val cy = offsetY + row * cellSize + cellSize / 2
 
-        if (index == BoardConfig.RED_START_INDEX ||
-            index == BoardConfig.GREEN_START_INDEX ||
-            index == BoardConfig.YELLOW_START_INDEX ||
-            index == BoardConfig.BLUE_START_INDEX) {
-            drawStar(cx, cy, cellSize * 0.32f, Color.White, Color.White)
-        } else {
-            drawStar(cx, cy, cellSize * 0.32f, SafeZoneStar, Color(0xFFE65100))
-        }
+        drawStar(cx, cy, cellSize * 0.36f, Color.White, Color(0xFF424242))
     }
 }
 
@@ -580,13 +659,13 @@ private fun DrawScope.drawStar(cx: Float, cy: Float, radius: Float, fillColor: C
     for (i in 0 until points * 2) {
         val r = if (i % 2 == 0) radius else radius * 0.42f
         val angle = Math.toRadians((i * 360.0 / (points * 2)) - 90.0)
-        val x = cx + r * Math.cos(angle).toFloat()
-        val y = cy + r * Math.sin(angle).toFloat()
+        val x = cx + r * cos(angle).toFloat()
+        val y = cy + r * sin(angle).toFloat()
         if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
     }
     path.close()
     drawPath(path, color = fillColor, style = Fill)
-    drawPath(path, color = strokeColor, style = Stroke(width = 1.6f))
+    drawPath(path, color = strokeColor, style = Stroke(width = 1.8f))
 }
 
 private fun DrawScope.drawCenterHome(offsetX: Float, offsetY: Float, cellSize: Float) {
@@ -630,24 +709,6 @@ private fun DrawScope.drawCenterHome(offsetX: Float, offsetY: Float, cellSize: F
         }
         drawPath(path, color = color, style = Fill)
     }
-
-    // Center Home Golden Star Medallion
-    drawCircle(
-        color = Color(0x33000000),
-        radius = cellSize * 0.44f,
-        center = Offset(centerX + 0.8f, centerY + 1f)
-    )
-    drawCircle(
-        color = Color.White,
-        radius = cellSize * 0.44f,
-        center = Offset(centerX, centerY)
-    )
-    drawCircle(
-        color = Color(0xFFFFF8E1),
-        radius = cellSize * 0.38f,
-        center = Offset(centerX, centerY)
-    )
-    drawStar(centerX, centerY, cellSize * 0.26f, SafeZoneStar, Color(0xFFE65100))
 }
 
 private fun getPlayerColor(playerColor: PlayerColor): Color {
@@ -658,4 +719,5 @@ private fun getPlayerColor(playerColor: PlayerColor): Color {
         PlayerColor.BLUE -> LudoBlue
     }
 }
+
 

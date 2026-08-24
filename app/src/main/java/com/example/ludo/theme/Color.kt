@@ -2,23 +2,23 @@ package com.example.ludo.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Classic Ludo vibrant colors
-val LudoRed = Color(0xFFE53935)
-val LudoGreen = Color(0xFF43A047)
-val LudoYellow = Color(0xFFFDD835)
-val LudoBlue = Color(0xFF1E88E5)
+// Classic Ludo vibrant colors matching reference
+val LudoRed = Color(0xFFE52521)
+val LudoGreen = Color(0xFF009E3D)
+val LudoYellow = Color(0xFFE5A800)
+val LudoBlue = Color(0xFF00A3FF)
 
 val LudoRedLight = Color(0xFFFFCDD2)
 val LudoGreenLight = Color(0xFFC8E6C9)
 val LudoYellowLight = Color(0xFFFFF9C4)
 val LudoBlueLight = Color(0xFFBBDEFB)
 
-// Classic warm board colors
-val BoardBackground = Color(0xFFFFF8E1)
-val TrackWhite = Color(0xFFFAFAFA)
-val SafeZoneStar = Color(0xFFFFD700)
-val BoardBorder = Color(0xFF5D4037)
-val HomeCenter = Color(0xFFFFFDE7)
+// Classic clean board colors
+val BoardBackground = Color(0xFFFFFFFF)
+val TrackWhite = Color(0xFFFFFFFF)
+val SafeZoneStar = Color(0xFFFFFFFF)
+val BoardBorder = Color(0xFF212121)
+val HomeCenter = Color(0xFFFFFFFF)
 
 // Common UI support
 val SurfaceWarm = Color(0xFFFFFBEF)
