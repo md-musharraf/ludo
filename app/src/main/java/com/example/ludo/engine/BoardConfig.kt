@@ -1,12 +1,5 @@
 package com.example.ludo.engine
 
-data class BoardPortal(
-    val fromTrackIndex: Int,
-    val toTrackIndex: Int,
-    val fromPos: Pair<Int, Int>,
-    val toPos: Pair<Int, Int>
-)
-
 object BoardConfig {
     val BOARD_SIZE = 15
 
@@ -44,21 +37,5 @@ object BoardConfig {
         1 to listOf(Pair(2,11), Pair(2,12), Pair(3,11), Pair(3,12)),
         2 to listOf(Pair(11,11), Pair(11,12), Pair(12,11), Pair(12,12)),
         3 to listOf(Pair(11,2), Pair(11,3), Pair(12,2), Pair(12,3))
-    )
-
-    // 4 Symmetrical Ladders (Base -> Top, +8 track step boost)
-    val ladders: List<BoardPortal> = listOf(
-        BoardPortal(4, 12, mainTrack[4], mainTrack[12]),
-        BoardPortal(17, 25, mainTrack[17], mainTrack[25]),
-        BoardPortal(30, 38, mainTrack[30], mainTrack[38]),
-        BoardPortal(43, 51, mainTrack[43], mainTrack[51])
-    )
-
-    // 4 Symmetrical Snakes (Head -> Tail, -8 track step drop)
-    val snakes: List<BoardPortal> = listOf(
-        BoardPortal(11, 3, mainTrack[11], mainTrack[3]),
-        BoardPortal(24, 16, mainTrack[24], mainTrack[16]),
-        BoardPortal(37, 29, mainTrack[37], mainTrack[29]),
-        BoardPortal(50, 42, mainTrack[50], mainTrack[42])
     )
 }

@@ -194,10 +194,8 @@ class GameEngine {
                     boardPosition = targetBoardPos
                 )
                 updateToken(playerIndex, tokenIndex, updatedToken)
-                delay(120)
-
-                val afterSnakeLadder = checkSnakeLadder(playerIndex, tokenIndex, 0, path)
-                handlePostMove(playerIndex, afterSnakeLadder ?: updatedToken)
+                delay(100)
+                handlePostMove(playerIndex, updatedToken)
             } else {
                 var currentPos = token.positionIndex
                 for (step in 1..diceRoll) {
@@ -220,101 +218,9 @@ class GameEngine {
                 }
 
                 val finalToken = _state.value.players[playerIndex].tokens[tokenIndex]
-
-                if (finalToken.state == TokenState.ON_BOARD && currentPos < 51) {
-                    val afterSnakeLadder = checkSnakeLadder(playerIndex, tokenIndex, currentPos, path)
-                    handlePostMove(playerIndex, afterSnakeLadder ?: finalToken)
-                } else {
-                    handlePostMove(playerIndex, finalToken)
-                }
+                handlePostMove(playerIndex, finalToken)
             }
         }
-    }
-
-    private suspend fun checkSnakeLadder(
-        playerIndex: Int,
-        tokenIndex: Int,
-        positionIndex: Int,
-        path: List<Pair<Int, Int>>
-    ): Token? {
-        val currentBoardPos = path.getOrNull(positionIndex) ?: return null
-        val player = _state.value.players[playerIndex]
-        val token = player.tokens[tokenIndex]
-
-        // Check if current position is on a Ladder base
-        val ladder = BoardConfig.ladders.firstOrNull { it.fromPos == currentBoardPos }
-        if (ladder != null) {
-            val targetIndex = (positionIndex + 8).coerceAtMost(56)
-            val targetBoardPos = path.getOrNull(targetIndex) ?: ladder.toPos
-
-            SoundEffectManager.playLadderClimb()
-
-            _state.update {
-                it.copy(
-                    lastSnakeLadderEvent = SnakeLadderEvent(
-                        type = SnakeLadderType.LADDER,
-                        playerId = player.id,
-                        tokenId = token.id,
-                        fromIndex = positionIndex,
-                        toIndex = targetIndex,
-                        fromBoardPos = currentBoardPos,
-                        toBoardPos = targetBoardPos
-                    ),
-                    moveMessage = "\uD83E\uDE9C LADDER BOOST! ${player.name} climbed to safety!"
-                )
-            }
-
-            delay(200)
-            animateHopFrames(player.id, token.id, currentBoardPos, targetBoardPos, frames = 12)
-
-            val newState = if (targetIndex >= 51) TokenState.IN_HOME_COLUMN else TokenState.ON_BOARD
-            val updatedToken = token.copy(
-                state = if (targetIndex == 56) TokenState.FINISHED else newState,
-                positionIndex = targetIndex,
-                boardPosition = targetBoardPos
-            )
-            updateToken(playerIndex, tokenIndex, updatedToken)
-            delay(300)
-            return updatedToken
-        }
-
-        // Check if current position is on a Snake head
-        val snake = BoardConfig.snakes.firstOrNull { it.fromPos == currentBoardPos }
-        if (snake != null) {
-            val targetIndex = (positionIndex - 8).coerceAtLeast(0)
-            val targetBoardPos = path.getOrNull(targetIndex) ?: snake.toPos
-
-            SoundEffectManager.playSnakeSlide()
-
-            _state.update {
-                it.copy(
-                    lastSnakeLadderEvent = SnakeLadderEvent(
-                        type = SnakeLadderType.SNAKE,
-                        playerId = player.id,
-                        tokenId = token.id,
-                        fromIndex = positionIndex,
-                        toIndex = targetIndex,
-                        fromBoardPos = currentBoardPos,
-                        toBoardPos = targetBoardPos
-                    ),
-                    moveMessage = "\uD83D\uDC0D SNAKE BITE! ${player.name} slithered down!"
-                )
-            }
-
-            delay(200)
-            animateHopFrames(player.id, token.id, currentBoardPos, targetBoardPos, frames = 12)
-
-            val updatedToken = token.copy(
-                state = TokenState.ON_BOARD,
-                positionIndex = targetIndex,
-                boardPosition = targetBoardPos
-            )
-            updateToken(playerIndex, tokenIndex, updatedToken)
-            delay(300)
-            return updatedToken
-        }
-
-        return null
     }
 
     private suspend fun animateHopFrames(
@@ -322,7 +228,7 @@ class GameEngine {
         tokenId: Int,
         fromPos: Pair<Int, Int>,
         toPos: Pair<Int, Int>,
-        frames: Int = 8
+        frames: Int = 10
     ) {
         for (f in 1..frames) {
             val progress = f.toFloat() / frames.toFloat()
@@ -335,7 +241,7 @@ class GameEngine {
                     animatingHopProgress = progress
                 )
             }
-            delay(20) // ~50fps smooth hop
+            delay(16) // Smooth 60fps hop
         }
         _state.update {
             it.copy(
@@ -424,8 +330,7 @@ class GameEngine {
             it.copy(
                 animatingTokenId = null,
                 animatingPlayerId = null,
-                lastCapturedEvent = null,
-                lastSnakeLadderEvent = null
+                lastCapturedEvent = null
             )
         }
 

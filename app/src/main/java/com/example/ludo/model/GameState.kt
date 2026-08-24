@@ -8,19 +8,6 @@ data class CapturedTokenEvent(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-data class SnakeLadderEvent(
-    val type: SnakeLadderType,
-    val playerId: Int,
-    val tokenId: Int,
-    val fromIndex: Int,
-    val toIndex: Int,
-    val fromBoardPos: Pair<Int, Int>,
-    val toBoardPos: Pair<Int, Int>,
-    val timestamp: Long = System.currentTimeMillis()
-)
-
-enum class SnakeLadderType { SNAKE, LADDER }
-
 data class GameState(
     val players: List<Player> = emptyList(),
     val currentPlayerIndex: Int = 0,
@@ -38,7 +25,6 @@ data class GameState(
     val animatingToPos: Pair<Int, Int>? = null,
     val animatingHopProgress: Float = 0f,
     val lastCapturedEvent: CapturedTokenEvent? = null,
-    val lastSnakeLadderEvent: SnakeLadderEvent? = null,
     val isAutoMoving: Boolean = false
 )
 

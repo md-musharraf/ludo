@@ -13,24 +13,7 @@ class LudoEngineTest {
         assertEquals("There must be 4 home base positions", 4, BoardConfig.homePositions.size)
     }
 
-    @Test
-    fun testBoardConfigSnakesAndLadders() {
-        assertEquals("There must be exactly 4 ladders", 4, BoardConfig.ladders.size)
-        assertEquals("There must be exactly 4 snakes", 4, BoardConfig.snakes.size)
 
-        // Verify none of the ladders or snakes touch safe spots
-        for (ladder in BoardConfig.ladders) {
-            assertFalse("Ladder base must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(ladder.fromTrackIndex))
-            assertFalse("Ladder top must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(ladder.toTrackIndex))
-            assertTrue("Ladder must climb forward (+8 steps)", ladder.toTrackIndex - ladder.fromTrackIndex == 8)
-        }
-
-        for (snake in BoardConfig.snakes) {
-            assertFalse("Snake head must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(snake.fromTrackIndex))
-            assertFalse("Snake tail must not be on a safe spot", BoardConfig.safeSpotsIndices.contains(snake.toTrackIndex))
-            assertTrue("Snake must slide backward (-8 steps)", snake.fromTrackIndex - snake.toTrackIndex == 8)
-        }
-    }
 
     @Test
     fun testPathMapperForRed() {
@@ -110,23 +93,7 @@ class LudoEngineTest {
         assertEquals("Player 2 should be YELLOW (opposite)", PlayerColor.YELLOW, state.players[1].color)
     }
 
-    @Test
-    fun testSnakeLadderEventStructure() {
-        val event = SnakeLadderEvent(
-            type = SnakeLadderType.LADDER,
-            playerId = 0,
-            tokenId = 1,
-            fromIndex = 4,
-            toIndex = 12,
-            fromBoardPos = Pair(6, 5),
-            toBoardPos = Pair(0, 8)
-        )
-        assertEquals(SnakeLadderType.LADDER, event.type)
-        assertEquals(0, event.playerId)
-        assertEquals(1, event.tokenId)
-        assertEquals(4, event.fromIndex)
-        assertEquals(12, event.toIndex)
-    }
+
 
     @Test
     fun testCapturedTokenEventStructure() {

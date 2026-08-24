@@ -320,15 +320,12 @@ private fun RulesDialog(onDismiss: () -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    RuleItem("\uD83C\uDFB2", "Tap your corner dice to roll. Each player has their own dice.")
-                    RuleItem("\uD83D\uDEAA", "Roll a 6 to move a piece out of home base.")
-                    RuleItem("\uD83D\uDD04", "Rolling 6 grants a bonus turn. Three 6s forfeits turn.")
-                    RuleItem("\uD83D\uDCA5", "Land on an opponent to capture them + get bonus turn!")
-                    RuleItem("\u2B50", "Stars and start squares are Safe Zones.")
-                    RuleItem("\uD83D\uDC0D", "Snakes slide you backward on the track!")
-                    RuleItem("\uD83E\uDE9C", "Ladders boost you forward on the track!")
-                    RuleItem("\u2699\uFE0F", "Auto-move triggers when only 1 piece can move.")
-                    RuleItem("\uD83C\uDFE0", "Guide all 4 pieces to center Home to win!")
+                    RuleItem("🎲", "Tap your corner Dice Cup to roll. Each player has their own cup.")
+                    RuleItem("🚪", "Roll a 6 to move a piece out of your home base.")
+                    RuleItem("🔄", "Rolling a 6 grants you an extra bonus roll! (Three 6s forfeits turn).")
+                    RuleItem("💥", "Land on an opponent's piece to capture it and earn an extra turn!")
+                    RuleItem("⭐", "All Star positions and colored starting squares are Safe Zones.")
+                    RuleItem("🏠", "Guide all 4 pieces safely around the track into center Home to win!")
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))

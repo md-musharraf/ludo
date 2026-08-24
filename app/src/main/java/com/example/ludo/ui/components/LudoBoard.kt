@@ -29,10 +29,14 @@ private data class TokenRenderInfo(
     val isValid: Boolean,
     val isCurrentPlayer: Boolean,
     val isAnimating: Boolean = false,
-    val shadowOffset: Offset = Offset(2.5f, 3.5f),
-    val shadowRadius: Float = 1.05f
+    val shadowOffset: Offset = Offset(2.5f, 4f),
+    val shadowRadius: Float = 1.0f
 )
 
+/**
+ * Classic Authentic Ludo Board with 3D Tactile Gotis (Pawns).
+ * Clean, modern, symmetrical 15x15 board with smooth physics-based token hops.
+ */
 @Composable
 fun LudoBoard(
     gameState: GameState,
@@ -40,11 +44,12 @@ fun LudoBoard(
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "boardAnimations")
+
     val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.85f,
+        initialValue = 0.35f,
+        targetValue = 0.95f,
         animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
+            animation = tween(600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseAlpha"
@@ -52,22 +57,12 @@ fun LudoBoard(
 
     val pulseScale by infiniteTransition.animateFloat(
         initialValue = 1.0f,
-        targetValue = 1.22f,
+        targetValue = 1.25f,
         animationSpec = infiniteRepeatable(
-            animation = tween(650, easing = FastOutSlowInEasing),
+            animation = tween(600, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseScale"
-    )
-
-    val portalPulse by infiniteTransition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "portalPulse"
     )
 
     var renderedTokens by remember { mutableStateOf<List<TokenRenderInfo>>(emptyList()) }
@@ -81,7 +76,7 @@ fun LudoBoard(
                     if (info.playerId == currentPlayer.id && info.isValid) {
                         val dx = tapOffset.x - info.center.x
                         val dy = tapOffset.y - info.center.y
-                        val hitDistance = info.radius * 2.1f
+                        val hitDistance = info.radius * 2.2f
                         if (dx * dx + dy * dy <= hitDistance * hitDistance) {
                             onTokenClick(info.tokenId)
                             return@detectTapGestures
@@ -99,57 +94,54 @@ fun LudoBoard(
         val tokenList = mutableListOf<TokenRenderInfo>()
         val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex)
 
-        // 1. Board Background with warm classic styling
+        // 1. Board Drop Shadow & Wooden Base Frame
         drawRoundRect(
-            color = Color(0x33000000),
+            color = Color(0x38000000),
             topLeft = Offset(offsetX + 4f, offsetY + 6f),
             size = Size(boardSize, boardSize),
-            cornerRadius = CornerRadius(cellSize * 0.4f)
+            cornerRadius = CornerRadius(cellSize * 0.45f)
         )
         drawRoundRect(
-            color = BoardBackground,
+            color = Color(0xFFFDFBF7),
             topLeft = Offset(offsetX, offsetY),
             size = Size(boardSize, boardSize),
-            cornerRadius = CornerRadius(cellSize * 0.4f)
+            cornerRadius = CornerRadius(cellSize * 0.45f)
         )
 
-        // 2. Four Home Bases
+        // 2. Four Classic Home Bases
         drawHomeBase(offsetX, offsetY, cellSize, 0, 0, LudoRed, LudoRedLight, currentPlayer?.color == PlayerColor.RED, pulseAlpha)
         drawHomeBase(offsetX, offsetY, cellSize, 0, 9, LudoGreen, LudoGreenLight, currentPlayer?.color == PlayerColor.GREEN, pulseAlpha)
         drawHomeBase(offsetX, offsetY, cellSize, 9, 9, LudoYellow, LudoYellowLight, currentPlayer?.color == PlayerColor.YELLOW, pulseAlpha)
         drawHomeBase(offsetX, offsetY, cellSize, 9, 0, LudoBlue, LudoBlueLight, currentPlayer?.color == PlayerColor.BLUE, pulseAlpha)
 
-        // 3. Track Cells
+        // 3. Track Cells (52 Squares)
         drawTrackCells(offsetX, offsetY, cellSize)
 
         // 4. Starting Squares
         drawStartingSquares(offsetX, offsetY, cellSize)
 
-        // 5. Safe Zones
+        // 5. Safe Star Zones
         drawSafeZones(offsetX, offsetY, cellSize)
 
-        // 6. Symmetrical Snakes & Ladders on the Board
-        drawSnakesAndLaddersPortals(offsetX, offsetY, cellSize, portalPulse)
+        // 6. Home Columns
+        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.redHomeColumn, LudoRed)
+        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.greenHomeColumn, LudoGreen)
+        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.yellowHomeColumn, LudoYellow)
+        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.blueHomeColumn, LudoBlue)
 
-        // 7. Home Columns
-        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.redHomeColumn, LudoRed, LudoRedLight)
-        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.greenHomeColumn, LudoGreen, LudoGreenLight)
-        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.yellowHomeColumn, LudoYellow, LudoYellowLight)
-        drawHomeColumn(offsetX, offsetY, cellSize, BoardConfig.blueHomeColumn, LudoBlue, LudoBlueLight)
-
-        // 8. Center Home Triangles
+        // 7. Center Home Triangles & Golden Trophy Star
         drawCenterHome(offsetX, offsetY, cellSize)
 
-        // 9. Outer Wood Border Frame
+        // 8. Outer Mahogany Wood Border Frame
         drawRoundRect(
-            color = BoardBorder,
+            color = Color(0xFF4E342E),
             topLeft = Offset(offsetX, offsetY),
             size = Size(boardSize, boardSize),
-            cornerRadius = CornerRadius(cellSize * 0.4f),
-            style = Stroke(width = 3.5f)
+            cornerRadius = CornerRadius(cellSize * 0.45f),
+            style = Stroke(width = 4f)
         )
 
-        // 10. Collect Home Base Tokens
+        // 9. Collect Home Base Tokens
         for (player in gameState.players) {
             val colorOrdinal = player.color.ordinal
             for (token in player.tokens) {
@@ -160,7 +152,7 @@ fun LudoBoard(
                         val cy = offsetY + homePos.first * cellSize + cellSize / 2
                         val isCurr = player.id == currentPlayer?.id
                         val isValid = isCurr && gameState.validMoves.contains(token.id) && gameState.gamePhase == GamePhase.WAITING_FOR_MOVE
-                        val radius = cellSize * 0.38f
+                        val radius = cellSize * 0.40f
 
                         tokenList.add(
                             TokenRenderInfo(
@@ -178,7 +170,7 @@ fun LudoBoard(
             }
         }
 
-        // 11. Collect Board Tokens with Stacking
+        // 10. Collect Board Tokens with Stacking
         val boardTokensByCell = mutableMapOf<Pair<Int, Int>, MutableList<Pair<Player, Token>>>()
         for (player in gameState.players) {
             for (token in player.tokens) {
@@ -202,7 +194,7 @@ fun LudoBoard(
                 }
 
                 val (offsetXShift, offsetYShift, tokenRadius) = when (count) {
-                    1 -> Triple(0f, 0f, cellSize * 0.38f)
+                    1 -> Triple(0f, 0f, cellSize * 0.40f)
                     2 -> {
                         val d = cellSize * 0.16f
                         if (index == 0) Triple(-d, -d, cellSize * 0.28f)
@@ -246,7 +238,7 @@ fun LudoBoard(
             }
         }
 
-        // 12. Parabolic Hop Animation
+        // 11. Smooth Parabolic Hop Animation
         if (gameState.animatingPlayerId != null && gameState.animatingTokenId != null &&
             gameState.animatingFromPos != null && gameState.animatingToPos != null) {
 
@@ -261,10 +253,10 @@ fun LudoBoard(
 
             val curX = fromX + (toX - fromX) * progress
             val curY = fromY + (toY - fromY) * progress
-            val hopHeight = sin(progress * Math.PI).toFloat() * cellSize * 0.7f
+            val hopHeight = sin(progress * Math.PI).toFloat() * cellSize * 0.85f
             val elevatedY = curY - hopHeight
-            val elevatedScale = 1f + sin(progress * Math.PI).toFloat() * 0.3f
-            val tokenRadius = cellSize * 0.38f * elevatedScale
+            val elevatedScale = 1f + sin(progress * Math.PI).toFloat() * 0.32f
+            val tokenRadius = cellSize * 0.40f * elevatedScale
 
             val player = gameState.players.firstOrNull { it.id == gameState.animatingPlayerId }
             if (player != null) {
@@ -278,25 +270,25 @@ fun LudoBoard(
                         isValid = false,
                         isCurrentPlayer = true,
                         isAnimating = true,
-                        shadowOffset = Offset(2f, hopHeight + 3.5f),
+                        shadowOffset = Offset(2.5f, hopHeight + 4f),
                         shadowRadius = 1f + hopHeight / 8f
                     )
                 )
             }
         }
 
-        // 13. Draw Tokens
+        // 12. Draw All 3D Gotis (Pawns)
         for (info in tokenList.sortedBy { if (it.isAnimating) 1 else 0 }) {
-            drawLudoToken(
+            draw3DGoti(
                 center = info.center,
                 radius = info.radius,
                 color = getPlayerColor(info.playerColor),
-                tokenId = info.tokenId,
                 isValid = info.isValid,
                 pulseAlpha = pulseAlpha,
                 pulseScale = pulseScale,
                 shadowOffset = info.shadowOffset,
-                shadowRadius = info.shadowRadius
+                shadowRadius = info.shadowRadius,
+                isAnimating = info.isAnimating
             )
         }
 
@@ -304,75 +296,135 @@ fun LudoBoard(
     }
 }
 
-private fun DrawScope.drawSnakesAndLaddersPortals(
-    offsetX: Float, offsetY: Float, cellSize: Float, portalPulse: Float
+/**
+ * Renders a tactile, classic & modern 3D Ludo Goti (Pawn).
+ * Anatomical layers:
+ * 1. Ground contact shadow
+ * 2. Flared pedestal base with bevel rim
+ * 3. Tapered waist/collar
+ * 4. Domed spherical crown head
+ * 5. High-gloss specular reflections
+ * 6. Active glowing pulse halo when valid to move
+ */
+private fun DrawScope.draw3DGoti(
+    center: Offset,
+    radius: Float,
+    color: Color,
+    isValid: Boolean,
+    pulseAlpha: Float,
+    pulseScale: Float,
+    shadowOffset: Offset,
+    shadowRadius: Float,
+    isAnimating: Boolean
 ) {
-    // 1. Draw Ladders: Classic green ladders with rungs
-    for (ladder in BoardConfig.ladders) {
-        val startX = offsetX + ladder.fromPos.second * cellSize + cellSize / 2
-        val startY = offsetY + ladder.fromPos.first * cellSize + cellSize / 2
-        val endX = offsetX + ladder.toPos.second * cellSize + cellSize / 2
-        val endY = offsetY + ladder.toPos.first * cellSize + cellSize / 2
+    val (cx, cy) = center.x to center.y
 
-        drawLine(
-            color = LudoGreen.copy(alpha = 0.75f),
-            start = Offset(startX, startY),
-            end = Offset(endX, endY),
-            strokeWidth = 3.5f
-        )
-
+    // 1. Selectable Active Glowing Pulsing Halo
+    if (isValid) {
         drawCircle(
-            color = LudoGreen.copy(alpha = 0.2f),
-            radius = cellSize * 0.38f,
-            center = Offset(startX, startY)
+            color = color.copy(alpha = pulseAlpha * 0.55f),
+            radius = radius * pulseScale * 1.55f,
+            center = Offset(cx, cy)
         )
         drawCircle(
-            color = LudoGreen,
-            radius = cellSize * 0.24f,
-            center = Offset(startX, startY),
-            style = Stroke(width = 1.5f)
-        )
-
-        drawCircle(
-            color = LudoGreen.copy(alpha = 0.2f),
-            radius = cellSize * 0.38f,
-            center = Offset(endX, endY)
+            color = Color.White.copy(alpha = pulseAlpha * 0.95f),
+            radius = radius * pulseScale * 1.25f,
+            center = Offset(cx, cy),
+            style = Stroke(width = 2.4f)
         )
     }
 
-    // 2. Draw Snakes: Classic orange/red snake curves
-    for (snake in BoardConfig.snakes) {
-        val headX = offsetX + snake.fromPos.second * cellSize + cellSize / 2
-        val headY = offsetY + snake.fromPos.first * cellSize + cellSize / 2
-        val tailX = offsetX + snake.toPos.second * cellSize + cellSize / 2
-        val tailY = offsetY + snake.toPos.first * cellSize + cellSize / 2
+    // 2. Soft Ground Contact Shadow (Expands during air hop)
+    val shadowWidth = radius * 1.9f * shadowRadius
+    val shadowHeight = radius * 0.75f * shadowRadius
+    drawOval(
+        color = Color(0x3D000000),
+        topLeft = Offset(cx - shadowWidth / 2 + shadowOffset.x, cy + radius * 0.35f + shadowOffset.y),
+        size = Size(shadowWidth, shadowHeight)
+    )
 
-        val midX = (headX + tailX) / 2 + (headY - tailY) * 0.2f
-        val midY = (headY + tailY) / 2 + (tailX - headX) * 0.2f
+    // 3. Flared Pedestal Base Disc
+    val baseCenter = Offset(cx, cy + radius * 0.22f)
+    val baseRadius = radius * 0.95f
 
-        val snakePath = Path().apply {
-            moveTo(headX, headY)
-            quadraticTo(midX, midY, tailX, tailY)
-        }
+    // Outer Dark Bevel Rim
+    drawCircle(
+        color = Color(0x33000000),
+        radius = baseRadius,
+        center = Offset(baseCenter.x + 0.8f, baseCenter.y + 1.2f)
+    )
+    // White Base Ring Accent
+    drawCircle(
+        color = Color.White,
+        radius = baseRadius,
+        center = baseCenter
+    )
+    // Base Disc Body
+    drawCircle(
+        color = color,
+        radius = baseRadius * 0.88f,
+        center = baseCenter
+    )
+    // Base Top Edge Specular Rim
+    drawCircle(
+        color = Color.White.copy(alpha = 0.45f),
+        radius = baseRadius * 0.88f,
+        center = baseCenter,
+        style = Stroke(width = 1.5f)
+    )
 
-        drawPath(
-            snakePath,
-            color = LudoRed.copy(alpha = 0.75f),
-            style = Stroke(width = 3.5f)
-        )
+    // 4. Domed Spherical Crown Head (Offset upward for 3D standing perspective)
+    val headCenter = Offset(cx, cy - radius * 0.18f)
+    val headRadius = radius * 0.64f
 
-        drawCircle(
-            color = LudoRed.copy(alpha = 0.2f),
-            radius = cellSize * 0.38f,
-            center = Offset(headX, headY)
-        )
-        drawCircle(
-            color = LudoRed,
-            radius = cellSize * 0.24f,
-            center = Offset(headX, headY),
-            style = Stroke(width = 1.5f)
-        )
-    }
+    // Head Shadow Drop onto Base
+    drawCircle(
+        color = Color(0x30000000),
+        radius = headRadius * 1.08f,
+        center = Offset(headCenter.x + 0.8f, headCenter.y + 1.4f)
+    )
+
+    // White Head Border
+    drawCircle(
+        color = Color.White,
+        radius = headRadius * 1.06f,
+        center = headCenter
+    )
+
+    // 3D Saturated Jewel Head Body
+    drawCircle(
+        color = color,
+        radius = headRadius,
+        center = headCenter
+    )
+
+    // Inner Metallic Crown Ring
+    drawCircle(
+        color = Color.White.copy(alpha = 0.65f),
+        radius = headRadius * 0.48f,
+        center = headCenter,
+        style = Stroke(width = 1.6f)
+    )
+
+    // Center Jewel Accent Dot
+    drawCircle(
+        color = Color.White,
+        radius = headRadius * 0.18f,
+        center = headCenter
+    )
+
+    // Top-Left Primary Specular Gloss Highlight
+    val glossCenter = Offset(headCenter.x - headRadius * 0.30f, headCenter.y - headRadius * 0.30f)
+    drawCircle(
+        color = Color.White.copy(alpha = 0.80f),
+        radius = headRadius * 0.32f,
+        center = glossCenter
+    )
+    drawCircle(
+        color = Color.White,
+        radius = headRadius * 0.15f,
+        center = Offset(glossCenter.x - headRadius * 0.05f, glossCenter.y - headRadius * 0.05f)
+    )
 }
 
 private fun DrawScope.drawHomeBase(
@@ -384,33 +436,37 @@ private fun DrawScope.drawHomeBase(
     val y = offsetY + startRow * cellSize
     val homeSize = cellSize * 6
 
+    // Outer Colored Rounded Frame
     drawRoundRect(
         color = color,
         topLeft = Offset(x, y),
         size = Size(homeSize, homeSize),
-        cornerRadius = CornerRadius(cellSize * 0.4f)
+        cornerRadius = CornerRadius(cellSize * 0.45f)
     )
 
+    // Active Player Turn Halo
     if (isCurrentPlayer) {
         drawRoundRect(
             color = color.copy(alpha = pulseAlpha * 0.6f),
-            topLeft = Offset(x - 2.5f, y - 2.5f),
-            size = Size(homeSize + 5f, homeSize + 5f),
-            cornerRadius = CornerRadius(cellSize * 0.4f),
+            topLeft = Offset(x - 3f, y - 3f),
+            size = Size(homeSize + 6f, homeSize + 6f),
+            cornerRadius = CornerRadius(cellSize * 0.45f),
             style = Stroke(width = 3.5f)
         )
     }
 
+    // Inner White Platform
     val innerMargin = cellSize * 0.85f
     val innerSize = homeSize - innerMargin * 2
     drawRoundRect(
         color = Color.White,
         topLeft = Offset(x + innerMargin, y + innerMargin),
         size = Size(innerSize, innerSize),
-        cornerRadius = CornerRadius(cellSize * 0.35f)
+        cornerRadius = CornerRadius(cellSize * 0.38f)
     )
 
-    val spotRadius = cellSize * 0.45f
+    // 4 Sunken Goti Nests
+    val spotRadius = cellSize * 0.46f
     val spotCenters = listOf(
         Offset(x + homeSize * 0.32f, y + homeSize * 0.32f),
         Offset(x + homeSize * 0.68f, y + homeSize * 0.32f),
@@ -419,8 +475,13 @@ private fun DrawScope.drawHomeBase(
     )
 
     spotCenters.forEach { center ->
-        drawCircle(color = color, radius = spotRadius, center = center)
-        drawCircle(color = Color.White, radius = spotRadius * 0.6f, center = center)
+        // Outer socket shadow
+        drawCircle(color = Color(0x18000000), radius = spotRadius * 1.08f, center = Offset(center.x + 0.8f, center.y + 1f))
+        // Colored socket rim
+        drawCircle(color = color.copy(alpha = 0.25f), radius = spotRadius, center = center)
+        drawCircle(color = color, radius = spotRadius, center = center, style = Stroke(width = 2.5f))
+        // White inner nest bed
+        drawCircle(color = Color.White, radius = spotRadius * 0.65f, center = center)
     }
 }
 
@@ -431,12 +492,12 @@ private fun DrawScope.drawTrackCells(offsetX: Float, offsetY: Float, cellSize: F
         val y = offsetY + row * cellSize
 
         drawRect(
-            color = TrackWhite,
+            color = Color.White,
             topLeft = Offset(x, y),
             size = Size(cellSize, cellSize)
         )
         drawRect(
-            color = Color(0xFFE0E0E0),
+            color = Color(0xFFE2D9CC),
             topLeft = Offset(x, y),
             size = Size(cellSize, cellSize),
             style = Stroke(width = 1f)
@@ -465,14 +526,14 @@ private fun DrawScope.drawStartingSquares(offsetX: Float, offsetY: Float, cellSi
             color = Color(0xFFE0E0E0),
             topLeft = Offset(x, y),
             size = Size(cellSize, cellSize),
-            style = Stroke(width = 1f)
+            style = Stroke(width = 1.2f)
         )
     }
 }
 
 private fun DrawScope.drawHomeColumn(
     offsetX: Float, offsetY: Float, cellSize: Float,
-    positions: List<Pair<Int, Int>>, color: Color, lightColor: Color
+    positions: List<Pair<Int, Int>>, color: Color
 ) {
     positions.forEachIndexed { _, (row, col) ->
         val x = offsetX + col * cellSize
@@ -484,7 +545,7 @@ private fun DrawScope.drawHomeColumn(
             size = Size(cellSize, cellSize)
         )
         drawRect(
-            color = Color(0xFFE0E0E0),
+            color = Color.White.copy(alpha = 0.5f),
             topLeft = Offset(x, y),
             size = Size(cellSize, cellSize),
             style = Stroke(width = 1f)
@@ -504,7 +565,7 @@ private fun DrawScope.drawSafeZones(offsetX: Float, offsetY: Float, cellSize: Fl
             index == BoardConfig.BLUE_START_INDEX) {
             drawStar(cx, cy, cellSize * 0.32f, Color.White, Color.White)
         } else {
-            drawStar(cx, cy, cellSize * 0.32f, SafeZoneStar, Color(0xFFF57F17))
+            drawStar(cx, cy, cellSize * 0.32f, SafeZoneStar, Color(0xFFE65100))
         }
     }
 }
@@ -521,7 +582,7 @@ private fun DrawScope.drawStar(cx: Float, cy: Float, radius: Float, fillColor: C
     }
     path.close()
     drawPath(path, color = fillColor, style = Fill)
-    drawPath(path, color = strokeColor, style = Stroke(width = 1.5f))
+    drawPath(path, color = strokeColor, style = Stroke(width = 1.6f))
 }
 
 private fun DrawScope.drawCenterHome(offsetX: Float, offsetY: Float, cellSize: Float) {
@@ -566,77 +627,23 @@ private fun DrawScope.drawCenterHome(offsetX: Float, offsetY: Float, cellSize: F
         drawPath(path, color = color, style = Fill)
     }
 
-    drawCircle(
-        color = Color.White,
-        radius = cellSize * 0.42f,
-        center = Offset(centerX, centerY)
-    )
-    drawStar(centerX, centerY, cellSize * 0.26f, SafeZoneStar, Color(0xFFF57F17))
-}
-
-private fun DrawScope.drawLudoToken(
-    center: Offset,
-    radius: Float,
-    color: Color,
-    tokenId: Int,
-    isValid: Boolean,
-    pulseAlpha: Float,
-    pulseScale: Float,
-    shadowOffset: Offset = Offset(2.5f, 3.5f),
-    shadowRadius: Float = 1.05f
-) {
-    val (cx, cy) = center.x to center.y
-
-    if (isValid) {
-        drawCircle(
-            color = color.copy(alpha = pulseAlpha * 0.55f),
-            radius = radius * pulseScale * 1.55f,
-            center = Offset(cx, cy)
-        )
-        drawCircle(
-            color = Color.White.copy(alpha = pulseAlpha * 0.9f),
-            radius = radius * pulseScale * 1.25f,
-            center = Offset(cx, cy),
-            style = Stroke(width = 2.2f)
-        )
-    }
-
+    // Center Home Golden Star Medallion
     drawCircle(
         color = Color(0x33000000),
-        radius = radius * shadowRadius,
-        center = Offset(cx + shadowOffset.x, cy + shadowOffset.y)
+        radius = cellSize * 0.44f,
+        center = Offset(centerX + 0.8f, centerY + 1f)
     )
-
     drawCircle(
         color = Color.White,
-        radius = radius * 1.05f,
-        center = Offset(cx, cy)
+        radius = cellSize * 0.44f,
+        center = Offset(centerX, centerY)
     )
-
     drawCircle(
-        color = color,
-        radius = radius * 0.85f,
-        center = Offset(cx, cy)
+        color = Color(0xFFFFF8E1),
+        radius = cellSize * 0.38f,
+        center = Offset(centerX, centerY)
     )
-
-    drawCircle(
-        color = Color.White.copy(alpha = 0.5f),
-        radius = radius * 0.35f,
-        center = Offset(cx - radius * 0.25f, cy - radius * 0.25f)
-    )
-
-    drawCircle(
-        color = Color.White.copy(alpha = 0.7f),
-        radius = radius * 0.4f,
-        center = Offset(cx, cy),
-        style = Stroke(width = 1.5f)
-    )
-
-    drawCircle(
-        color = Color.White,
-        radius = radius * 0.15f,
-        center = Offset(cx, cy)
-    )
+    drawStar(centerX, centerY, cellSize * 0.26f, SafeZoneStar, Color(0xFFE65100))
 }
 
 private fun getPlayerColor(playerColor: PlayerColor): Color {
@@ -647,3 +654,4 @@ private fun getPlayerColor(playerColor: PlayerColor): Color {
         PlayerColor.BLUE -> LudoBlue
     }
 }
+

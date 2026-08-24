@@ -55,18 +55,6 @@ class AIPlayer(private val engine: GameEngine, private val difficulty: String) {
                         score += 90
                     }
 
-                    // Ladder bonus!
-                    val isLadder = BoardConfig.ladders.any { it.fromPos == targetBoardPos }
-                    if (isLadder) {
-                        score += 130
-                    }
-
-                    // Snake penalty!
-                    val isSnake = BoardConfig.snakes.any { it.fromPos == targetBoardPos }
-                    if (isSnake) {
-                        score -= 110
-                    }
-
                     // Capturing opponent
                     if (!BoardConfig.safePositions.contains(targetBoardPos)) {
                         for (otherPlayer in state.players) {
