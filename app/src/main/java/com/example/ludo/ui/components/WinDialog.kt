@@ -17,9 +17,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.model.Player
-import com.example.ludo.model.PlayerColor
-import com.example.ludo.theme.*
 
 @Composable
 fun WinDialog(
@@ -47,13 +46,7 @@ fun WinDialog(
         label = "trophyPulse"
     )
 
-    val winnerColor = when (winner?.color) {
-        PlayerColor.RED -> LudoRed
-        PlayerColor.GREEN -> LudoGreen
-        PlayerColor.YELLOW -> LudoYellow
-        PlayerColor.BLUE -> LudoBlue
-        null -> LudoGreen
-    }
+    val winnerColor = PlayerColorUtils.getComposeColor(winner?.color)
 
     Dialog(onDismissRequest = { }) {
         Card(

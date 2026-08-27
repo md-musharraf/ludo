@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+echo "🔍 Running Ludo Pre-Commit Quality Checks..."
+./gradlew.bat test --daemon
+if [ $? -ne 0 ]; then
+    echo "❌ Unit tests failed! Commit aborted."
+    exit 1
+fi
+
+echo "✅ All tests passed cleanly!"

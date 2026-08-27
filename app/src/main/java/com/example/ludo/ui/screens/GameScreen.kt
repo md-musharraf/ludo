@@ -14,10 +14,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.ludo.audio.SoundEffectManager
+import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.model.PlayerColor
 import com.example.ludo.theme.*
 import com.example.ludo.ui.components.*
@@ -43,13 +45,7 @@ fun GameScreen(
     val bluePlayer = gameState.players.firstOrNull { it.color == PlayerColor.BLUE }
 
     val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex)
-    val currentPlayerColor = when (currentPlayer?.color) {
-        PlayerColor.RED -> LudoRed
-        PlayerColor.GREEN -> LudoGreen
-        PlayerColor.YELLOW -> LudoYellow
-        PlayerColor.BLUE -> LudoBlue
-        null -> LudoGreen
-    }
+    val currentPlayerColor = PlayerColorUtils.getComposeColor(currentPlayer?.color)
 
     Box(
         modifier = Modifier
@@ -68,7 +64,7 @@ fun GameScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -162,7 +158,7 @@ fun GameScreen(
                         .fillMaxHeight()
                 )
 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 CornerPlayerDock(
                     player = greenPlayer,
@@ -181,12 +177,12 @@ fun GameScreen(
                 )
             }
 
-            // 3. CENTER BOARD (Constant Aspect Ratio & Fixed Bounds)
+            // 3. CENTER BOARD (Adaptive Aspect Ratio & Fixed Bounds)
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(1f, fill = false)
                     .aspectRatio(1f)
-                    .padding(vertical = 4.dp),
+                    .padding(vertical = 2.dp),
                 contentAlignment = Alignment.Center
             ) {
                 LudoBoard(
@@ -217,7 +213,7 @@ fun GameScreen(
                     color = currentPlayerColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -245,7 +241,7 @@ fun GameScreen(
                         .fillMaxHeight()
                 )
 
-                Spacer(modifier = Modifier.width(10.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 CornerPlayerDock(
                     player = yellowPlayer,

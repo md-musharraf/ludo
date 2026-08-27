@@ -1,9 +1,11 @@
 package com.example.ludo.engine
 
 import com.example.ludo.audio.SoundEffectManager
+import com.example.ludo.core.logging.AppLogger
 import com.example.ludo.model.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,10 +18,12 @@ class GameEngine {
     val state: StateFlow<GameState> = _state.asStateFlow()
 
     private val moveValidator = MoveValidator()
-    private val engineScope = CoroutineScope(Dispatchers.Default)
+    private val engineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var aiPlayer: AIPlayer? = null
 
     fun resetGame(playerCount: Int, isVsAI: Boolean, aiDifficulty: String = "Hard") {
+        AppLogger.i("GameEngine") { "Resetting game: players=$playerCount, isVsAI=$isVsAI, difficulty=$aiDifficulty" }
+
         val selectedColors = when (playerCount) {
             2 -> listOf(PlayerColor.RED, PlayerColor.YELLOW)
             3 -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW)
@@ -56,7 +60,7 @@ class GameEngine {
             players = players,
             currentPlayerIndex = 0,
             gamePhase = GamePhase.WAITING_FOR_ROLL,
-            moveMessage = "${players[0].name}'s turn! Roll your corner dice \uD83C\uDFB2"
+            moveMessage = "${players[0].name}'s turn! Roll your corner dice 🎲"
         )
 
         aiPlayer = if (isVsAI) AIPlayer(this, aiDifficulty) else null
@@ -69,6 +73,7 @@ class GameEngine {
         if (currentState.gamePhase != GamePhase.WAITING_FOR_ROLL || currentState.isGameOver) return
 
         val currentPlayer = currentState.players[currentState.currentPlayerIndex]
+        AppLogger.d("GameEngine") { "${currentPlayer.name} initiated dice roll" }
 
         _state.update {
             it.copy(
@@ -80,9 +85,11 @@ class GameEngine {
         SoundEffectManager.playDiceRoll()
 
         engineScope.launch {
-            delay(550) // Realistic dice tumble duration
+            delay(500) // Fast and fluid dice tumble duration
 
             val roll = (1..6).random()
+            AppLogger.i("GameEngine") { "${currentPlayer.name} rolled: $roll" }
+
             if (roll == 6) {
                 SoundEffectManager.playSixRolled()
             }
@@ -103,21 +110,22 @@ class GameEngine {
                         moveMessage = "Rolled a $roll. No valid moves!"
                     )
                 }
-                delay(1100)
+                delay(900)
                 nextTurn()
             } else {
                 val consecutive = if (roll == 6) currentState.consecutiveSixes + 1 else 0
                 if (consecutive >= 3) {
+                    AppLogger.w("GameEngine") { "${currentPlayer.name} rolled three consecutive sixes! Turn forfeited." }
                     _state.update {
                         it.copy(
                             diceResult = DiceResult(roll),
                             isDiceRollingForPlayer = null,
                             consecutiveSixes = 0,
                             validMoves = emptyList(),
-                            moveMessage = "Three 6s! Turn forfeited \u26A0\uFE0F"
+                            moveMessage = "Three 6s! Turn forfeited ⚠️"
                         )
                     }
-                    delay(1100)
+                    delay(900)
                     nextTurn()
                 } else {
                     val extraRollText = if (roll == 6) " (Bonus roll on 6!)" else ""
@@ -149,7 +157,7 @@ class GameEngine {
                                     moveMessage = "${currentPlayer.name} rolled $roll! Auto-moving piece...$extraRollText"
                                 )
                             }
-                            delay(350)
+                            delay(300)
                             selectToken(autoTokenId)
                         } else {
                             _state.update {
@@ -184,6 +192,8 @@ class GameEngine {
         val token = player.tokens[tokenIndex]
         val diceRoll = currentState.diceResult?.value ?: return
 
+        AppLogger.i("GameEngine") { "${player.name} selected token $tokenId (pos: ${token.positionIndex})" }
+
         _state.update {
             it.copy(
                 gamePhase = GamePhase.ANIMATING_MOVE,
@@ -202,8 +212,8 @@ class GameEngine {
                 SoundEffectManager.playLeaveBase()
                 val targetBoardPos = path[0]
 
-                val homeSpot = BoardConfig.homePositions[colorOrdinal]?.get(token.id) ?: Pair(0,0)
-                animateHopFrames(player.id, tokenId, homeSpot, targetBoardPos)
+                val homeSpot = BoardConfig.homePositions[colorOrdinal]?.get(token.id) ?: Pair(0, 0)
+                animateHopFrames(player.id, tokenId, homeSpot, targetBoardPos, frames = 8)
 
                 val updatedToken = token.copy(
                     state = TokenState.ON_BOARD,
@@ -211,7 +221,7 @@ class GameEngine {
                     boardPosition = targetBoardPos
                 )
                 updateToken(playerIndex, tokenIndex, updatedToken)
-                delay(100)
+                delay(80)
                 handlePostMove(playerIndex, updatedToken)
             } else {
                 var currentPos = token.positionIndex
@@ -221,7 +231,7 @@ class GameEngine {
                     val toPos = path[currentPos]
 
                     SoundEffectManager.playTokenStep()
-                    animateHopFrames(player.id, tokenId, fromPos, toPos)
+                    animateHopFrames(player.id, tokenId, fromPos, toPos, frames = 8)
 
                     val state = if (currentPos >= 51) TokenState.IN_HOME_COLUMN else TokenState.ON_BOARD
                     val finalState = if (currentPos == 56) TokenState.FINISHED else state
@@ -245,7 +255,7 @@ class GameEngine {
         tokenId: Int,
         fromPos: Pair<Int, Int>,
         toPos: Pair<Int, Int>,
-        frames: Int = 14
+        frames: Int = 8
     ) {
         for (f in 1..frames) {
             val progress = f.toFloat() / frames.toFloat()
@@ -258,7 +268,7 @@ class GameEngine {
                     animatingHopProgress = progress
                 )
             }
-            delay(14) // Silky smooth 60-120fps physics hop
+            delay(16) // Smooth 60fps frame delta
         }
         _state.update {
             it.copy(
@@ -291,7 +301,7 @@ class GameEngine {
 
         if (token.state == TokenState.FINISHED) {
             extraTurn = true
-            captureMessage = " \uD83C\uDF89 ${currentPlayer.name} reached HOME!"
+            captureMessage = " 🎉 ${currentPlayer.name} reached HOME!"
             SoundEffectManager.playSixRolled()
         }
 
@@ -310,13 +320,14 @@ class GameEngine {
                 for (j in oppTokens.indices) {
                     val oppToken = oppTokens[j]
                     if (oppToken.state == TokenState.ON_BOARD && oppToken.boardPosition == token.boardPosition) {
+                        AppLogger.i("GameEngine") { "${currentPlayer.name} captured ${opp.name}'s token ${oppToken.id} at ${token.boardPosition}" }
                         SoundEffectManager.playCapture()
-                        val homeDest = BoardConfig.homePositions[oppColorOrdinal]?.get(oppToken.id) ?: Pair(0,0)
+                        val homeDest = BoardConfig.homePositions[oppColorOrdinal]?.get(oppToken.id) ?: Pair(0, 0)
 
                         val captureEvent = CapturedTokenEvent(
                             playerId = opp.id,
                             tokenId = oppToken.id,
-                            fromPosition = oppToken.boardPosition ?: Pair(0,0),
+                            fromPosition = oppToken.boardPosition ?: Pair(0, 0),
                             toHomePosition = homeDest
                         )
                         _state.update { it.copy(lastCapturedEvent = captureEvent) }
@@ -337,9 +348,9 @@ class GameEngine {
             }
 
             if (captured) {
-                captureMessage = " \uD83D\uDCA5 CAPTURED an opponent! Bonus turn!"
+                captureMessage = " 💥 CAPTURED an opponent! Bonus turn!"
                 _state.update { it.copy(players = players) }
-                delay(600)
+                delay(500)
             }
         }
 
@@ -361,7 +372,7 @@ class GameEngine {
                     gamePhase = GamePhase.WAITING_FOR_ROLL,
                     validMoves = emptyList(),
                     diceResult = null,
-                    moveMessage = "${currentPlayer.name} gets a bonus turn!$captureMessage Roll corner dice \uD83C\uDFB2"
+                    moveMessage = "${currentPlayer.name} gets a bonus turn!$captureMessage Roll corner dice 🎲"
                 )
             }
             checkAI()
@@ -393,7 +404,7 @@ class GameEngine {
                 animatingTokenId = null,
                 animatingPlayerId = null,
                 isAutoMoving = false,
-                moveMessage = "${nextPlayer.name}'s turn! Roll your corner dice \uD83C\uDFB2"
+                moveMessage = "${nextPlayer.name}'s turn! Roll your corner dice 🎲"
             )
         }
         checkAI()
@@ -403,13 +414,14 @@ class GameEngine {
         val players = _state.value.players
         val winner = players.firstOrNull { it.hasFinished }
         if (winner != null) {
+            AppLogger.i("GameEngine") { "🏆 Match won by ${winner.name} (id: ${winner.id})" }
             SoundEffectManager.playWinFanfare()
             _state.update {
                 it.copy(
                     gamePhase = GamePhase.GAME_OVER,
                     isGameOver = true,
                     winnerId = winner.id,
-                    moveMessage = "\uD83C\uDFC6 ${winner.name} WINS THE MATCH!"
+                    moveMessage = "🏆 ${winner.name} WINS THE MATCH!"
                 )
             }
         }

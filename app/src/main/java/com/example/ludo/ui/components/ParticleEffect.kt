@@ -26,7 +26,7 @@ fun ParticleEffect(modifier: Modifier = Modifier) {
             LudoRed, LudoGreen, LudoYellow, LudoBlue,
             SafeZoneStar, Color.White
         )
-        List(90) {
+        List(45) {
             Particle(
                 x = Random.nextFloat(),
                 y = Random.nextFloat() * 0.3f,
@@ -34,7 +34,7 @@ fun ParticleEffect(modifier: Modifier = Modifier) {
                 vy = Random.nextFloat() * 0.006f + 0.002f,
                 color = colors.random(),
                 alpha = Random.nextFloat() * 0.6f + 0.4f,
-                size = Random.nextFloat() * 8f + 3f
+                size = Random.nextFloat() * 6f + 3f
             )
         }
     }
@@ -54,7 +54,8 @@ fun ParticleEffect(modifier: Modifier = Modifier) {
         val w = size.width
         val h = size.height
 
-        for (p in particles) {
+        for (i in 0 until particles.size) {
+            val p = particles[i]
             val px = ((p.x + p.vx * time) % 1f) * w
             val py = ((p.y + p.vy * time) % 1f) * h
             val alpha = (p.alpha * (1f - (py / h) * 0.5f)).coerceIn(0f, 1f)

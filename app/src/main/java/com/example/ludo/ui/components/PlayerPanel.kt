@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,14 +19,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.model.Player
-import com.example.ludo.model.PlayerColor
 import com.example.ludo.model.TokenState
-import com.example.ludo.theme.*
 
 @Composable
 fun PlayerPanel(
@@ -54,32 +54,36 @@ private fun PlayerCard(
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "playerCardPulse")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.98f,
-        targetValue = 1.03f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
+    val pulseScale by if (isCurrent) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.98f,
+            targetValue = 1.03f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseScale"
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }
 
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.8f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glowAlpha"
-    )
+    val glowAlpha by if (isCurrent) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 0.8f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "glowAlpha"
+        )
+    } else {
+        remember { mutableFloatStateOf(0.3f) }
+    }
 
-    val color = getPlayerComposeColor(player.color)
-    val lightColor = getPlayerLightColor(player.color)
-
-    val tokensHome = player.tokens.count { it.state == TokenState.IN_HOME }
-    val tokensFinished = player.tokens.count { it.state == TokenState.FINISHED }
-    val tokensOnBoard = player.tokens.count { it.state == TokenState.ON_BOARD || it.state == TokenState.IN_HOME_COLUMN }
+    val color = PlayerColorUtils.getComposeColor(player.color)
+    val lightColor = PlayerColorUtils.getLightColor(player.color)
 
     Box(
         modifier = modifier
@@ -133,7 +137,6 @@ private fun PlayerCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                // Color Dot Avatar
                 Box(
                     modifier = Modifier
                         .size(14.dp)
@@ -162,10 +165,7 @@ private fun PlayerCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 4 Token Dots:
-            // Green filled = Finished
-            // Colored ring = Active on Board
-            // Gray = In Base
+            // 4 Token Dots
             Row(
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -202,23 +202,5 @@ private fun PlayerCard(
                 }
             }
         }
-    }
-}
-
-private fun getPlayerComposeColor(color: PlayerColor): Color {
-    return when (color) {
-        PlayerColor.RED -> LudoRed
-        PlayerColor.GREEN -> LudoGreen
-        PlayerColor.YELLOW -> LudoYellow
-        PlayerColor.BLUE -> LudoBlue
-    }
-}
-
-private fun getPlayerLightColor(color: PlayerColor): Color {
-    return when (color) {
-        PlayerColor.RED -> LudoRedLight
-        PlayerColor.GREEN -> LudoGreenLight
-        PlayerColor.YELLOW -> LudoYellowLight
-        PlayerColor.BLUE -> LudoBlueLight
     }
 }

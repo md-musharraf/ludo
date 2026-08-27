@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ludo.audio.SoundEffectManager
 import com.example.ludo.theme.*
 
 @Composable
@@ -113,7 +114,10 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                                         color = if (isSelected) LudoGreen else Color(0xFFE0E0E0),
                                         shape = CircleShape
                                     )
-                                    .clickable { playerCount = count }
+                                    .clickable {
+                                        SoundEffectManager.playButtonTap()
+                                        playerCount = count
+                                    }
                             ) {
                                 Text(
                                     text = "$count",
@@ -144,14 +148,20 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                             text = "🤖 vs AI",
                             isSelected = isVsAI,
                             color = LudoBlue,
-                            onClick = { isVsAI = true },
+                            onClick = {
+                                SoundEffectManager.playButtonTap()
+                                isVsAI = true
+                            },
                             modifier = Modifier.weight(1f)
                         )
                         ModeButton(
                             text = "👥 Local",
                             isSelected = !isVsAI,
                             color = LudoGreen,
-                            onClick = { isVsAI = false },
+                            onClick = {
+                                SoundEffectManager.playButtonTap()
+                                isVsAI = false
+                            },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -176,14 +186,20 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                                 text = "😊 Easy",
                                 isSelected = aiDifficulty == "Easy",
                                 color = LudoGreen,
-                                onClick = { aiDifficulty = "Easy" },
+                                onClick = {
+                                    SoundEffectManager.playButtonTap()
+                                    aiDifficulty = "Easy"
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                             ModeButton(
                                 text = "😈 Hard",
                                 isSelected = aiDifficulty == "Hard",
                                 color = LudoRed,
-                                onClick = { aiDifficulty = "Hard" },
+                                onClick = {
+                                    SoundEffectManager.playButtonTap()
+                                    aiDifficulty = "Hard"
+                                },
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -195,7 +211,10 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
 
             // Start button
             Button(
-                onClick = { onStartGame(playerCount, isVsAI, aiDifficulty) },
+                onClick = {
+                    SoundEffectManager.playButtonTap()
+                    onStartGame(playerCount, isVsAI, aiDifficulty)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(58.dp)

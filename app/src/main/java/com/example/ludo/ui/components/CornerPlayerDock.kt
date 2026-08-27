@@ -18,8 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.model.Player
-import com.example.ludo.model.PlayerColor
 import com.example.ludo.model.TokenState
 import com.example.ludo.theme.*
 
@@ -45,19 +45,23 @@ fun CornerPlayerDock(
         return
     }
 
-    val playerColor = getPlayerComposeColor(player.color)
-    val playerLightColor = getPlayerLightColor(player.color)
+    val playerColor = PlayerColorUtils.getComposeColor(player.color)
+    val playerLightColor = PlayerColorUtils.getLightColor(player.color)
 
     val infiniteTransition = rememberInfiniteTransition(label = "dockPulse")
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(850, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glowAlpha"
-    )
+    val glowAlpha by if (isCurrentTurn) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(850, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "glowAlpha"
+        )
+    } else {
+        remember { mutableFloatStateOf(0.35f) }
+    }
 
     val isLeft = corner == DockCorner.TOP_LEFT || corner == DockCorner.BOTTOM_LEFT
 
@@ -201,23 +205,5 @@ private fun PlayerInfoSection(
                 }
             }
         }
-    }
-}
-
-private fun getPlayerComposeColor(color: PlayerColor): Color {
-    return when (color) {
-        PlayerColor.RED -> LudoRed
-        PlayerColor.GREEN -> LudoGreen
-        PlayerColor.YELLOW -> LudoYellow
-        PlayerColor.BLUE -> LudoBlue
-    }
-}
-
-private fun getPlayerLightColor(color: PlayerColor): Color {
-    return when (color) {
-        PlayerColor.RED -> LudoRedLight
-        PlayerColor.GREEN -> LudoGreenLight
-        PlayerColor.YELLOW -> LudoYellowLight
-        PlayerColor.BLUE -> LudoBlueLight
     }
 }

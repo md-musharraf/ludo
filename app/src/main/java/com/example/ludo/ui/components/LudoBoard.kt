@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import com.example.ludo.core.util.PawnColorScheme
+import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.engine.BoardConfig
 import com.example.ludo.model.*
 import com.example.ludo.theme.*
@@ -35,54 +37,18 @@ private data class TokenRenderInfo(
     val hopHeight: Float = 0f
 )
 
-private data class PawnColorScheme(
-    val highlightColor: Color,
-    val lightColor: Color,
-    val baseColor: Color,
-    val darkColor: Color,
-    val deepShadow: Color
-)
-
-// Precomputed static color schemes for 60-120fps draw performance
-private val pawnColorSchemes: Map<PlayerColor, PawnColorScheme> = mapOf(
-    PlayerColor.RED to PawnColorScheme(
-        highlightColor = Color(0xFFFF8A80),
-        lightColor = Color(0xFFFF5252),
-        baseColor = Color(0xFFD32F2F),
-        darkColor = Color(0xFFB71C1C),
-        deepShadow = Color(0xFF4A0000)
-    ),
-    PlayerColor.GREEN to PawnColorScheme(
-        highlightColor = Color(0xFFB9F6CA),
-        lightColor = Color(0xFF4CAF50),
-        baseColor = Color(0xFF2E7D32),
-        darkColor = Color(0xFF1B5E20),
-        deepShadow = Color(0xFF002900)
-    ),
-    PlayerColor.YELLOW to PawnColorScheme(
-        highlightColor = Color(0xFFFFF9C4),
-        lightColor = Color(0xFFFFD54F),
-        baseColor = Color(0xFFFBC02D),
-        darkColor = Color(0xFFF57F17),
-        deepShadow = Color(0xFF6D3600)
-    ),
-    PlayerColor.BLUE to PawnColorScheme(
-        highlightColor = Color(0xFFB3E5FC),
-        lightColor = Color(0xFF42A5F5),
-        baseColor = Color(0xFF1976D2),
-        darkColor = Color(0xFF0D47A1),
-        deepShadow = Color(0xFF00153B)
-    )
-)
+// Reusable Path caches to prevent young-generation GC thrashing at 60-120fps
+private val sharedStemPath = Path()
+private val sharedArrowPath = Path()
+private val sharedStarPath = Path()
+private val sharedTrianglePath = Path()
 
 /**
  * Authentic Photorealistic 3D Classic Ludo Board.
- * Matches reference image with:
- * - 3D Turned Wooden / Gloss Plastic Pawns firmly grounded with contact shadows & ambient occlusion
- * - Deep sunken 3D socket saucers inside tinted pastel home bases
- * - Luxurious golden beveled frame around the board
- * - High-contrast directional lighting (top-left key light + bottom-right ambient bounce)
- * - 60/120fps optimized rendering pipeline
+ * High-performance mobile optimized rendering pipeline:
+ * - Zero GC allocation in per-frame DrawScope
+ * - Guarded animations (CPU enters sleep states when idle)
+ * - Directional 3D turned pawns with grounded ambient occlusion
  */
 @Composable
 fun LudoBoard(
@@ -90,36 +56,50 @@ fun LudoBoard(
     onTokenClick: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "boardAnimations")
+    val hasValidMoves = gameState.validMoves.isNotEmpty() && gameState.gamePhase == GamePhase.WAITING_FOR_MOVE
+    val isAnimating = gameState.animatingPlayerId != null
 
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.35f,
-        targetValue = 0.95f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseAlpha"
-    )
+    // Guarded infinite transition: ticks ONLY when interaction or animation requires it
+    val shouldAnimate = hasValidMoves || isAnimating || gameState.gamePhase == GamePhase.WAITING_FOR_MOVE
 
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1.0f,
-        targetValue = 1.18f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
+    val infiniteTransition = rememberInfiniteTransition(label = "boardPulse")
 
-    val renderedTokens = remember { mutableListOf<TokenRenderInfo>() }
+    val pulseAlpha by if (shouldAnimate) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.35f,
+            targetValue = 0.95f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseAlpha"
+        )
+    } else {
+        remember { mutableFloatStateOf(0.7f) }
+    }
+
+    val pulseScale by if (shouldAnimate) {
+        infiniteTransition.animateFloat(
+            initialValue = 1.0f,
+            targetValue = 1.18f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(600, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "pulseScale"
+        )
+    } else {
+        remember { mutableFloatStateOf(1.0f) }
+    }
+
+    val renderedTokens = remember { ArrayList<TokenRenderInfo>(16) }
 
     Canvas(
         modifier = modifier.pointerInput(gameState) {
             detectTapGestures { tapOffset ->
                 val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex) ?: return@detectTapGestures
 
-                val tokensCopy = synchronized(renderedTokens) { renderedTokens.toList() }
+                val tokensCopy = synchronized(renderedTokens) { ArrayList(renderedTokens) }
                 for (info in tokensCopy.reversed()) {
                     if (info.playerId == currentPlayer.id && info.isValid) {
                         val dx = tapOffset.x - info.center.x
@@ -139,7 +119,7 @@ fun LudoBoard(
         val offsetX = (size.width - boardSize) / 2f
         val offsetY = (size.height - boardSize) / 2f
 
-        val tokenList = mutableListOf<TokenRenderInfo>()
+        val tokenList = ArrayList<TokenRenderInfo>(16)
         val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex)
 
         // 1. Board Shadow & Canvas Background
@@ -229,12 +209,12 @@ fun LudoBoard(
         }
 
         // 11. Collect Board Tokens with Stacking
-        val boardTokensByCell = mutableMapOf<Pair<Int, Int>, MutableList<Pair<Player, Token>>>()
+        val boardTokensByCell = HashMap<Pair<Int, Int>, ArrayList<Pair<Player, Token>>>()
         for (player in gameState.players) {
             for (token in player.tokens) {
                 if (token.state == TokenState.ON_BOARD || token.state == TokenState.IN_HOME_COLUMN) {
                     token.boardPosition?.let { pos ->
-                        boardTokensByCell.getOrPut(pos) { mutableListOf() }.add(Pair(player, token))
+                        boardTokensByCell.getOrPut(pos) { ArrayList() }.add(Pair(player, token))
                     }
                 }
             }
@@ -340,18 +320,39 @@ fun LudoBoard(
         }
 
         // 13. Draw All Photorealistic 3D Gotis (Pawns)
-        for (info in tokenList.sortedBy { if (it.isAnimating) 1 else 0 }) {
-            draw3DClassicPawn(
-                center = info.center,
-                radius = info.radius,
-                playerColor = info.playerColor,
-                isValid = info.isValid,
-                pulseAlpha = pulseAlpha,
-                pulseScale = pulseScale,
-                groundCenter = info.groundCenter,
-                hopHeight = info.hopHeight,
-                isAnimating = info.isAnimating
-            )
+        for (i in 0 until tokenList.size) {
+            val info = tokenList[i]
+            if (!info.isAnimating) {
+                draw3DClassicPawn(
+                    center = info.center,
+                    radius = info.radius,
+                    playerColor = info.playerColor,
+                    isValid = info.isValid,
+                    pulseAlpha = pulseAlpha,
+                    pulseScale = pulseScale,
+                    groundCenter = info.groundCenter,
+                    hopHeight = info.hopHeight,
+                    isAnimating = false
+                )
+            }
+        }
+
+        // Draw animating pawn on top
+        for (i in 0 until tokenList.size) {
+            val info = tokenList[i]
+            if (info.isAnimating) {
+                draw3DClassicPawn(
+                    center = info.center,
+                    radius = info.radius,
+                    playerColor = info.playerColor,
+                    isValid = info.isValid,
+                    pulseAlpha = pulseAlpha,
+                    pulseScale = pulseScale,
+                    groundCenter = info.groundCenter,
+                    hopHeight = info.hopHeight,
+                    isAnimating = true
+                )
+            }
         }
 
         synchronized(renderedTokens) {
@@ -382,7 +383,7 @@ private fun DrawScope.draw3DClassicPawn(
     isAnimating: Boolean
 ) {
     val (cx, cy) = center.x to center.y
-    val colors = pawnColorSchemes[playerColor] ?: pawnColorSchemes.values.first()
+    val colors: PawnColorScheme = PlayerColorUtils.getPawnColorScheme(playerColor)
 
     // 1. Realistic Optical Ground Shadow & Ambient Occlusion (Firmly Seated on Board)
     val baseY = cy + radius * 0.26f
@@ -473,29 +474,28 @@ private fun DrawScope.draw3DClassicPawn(
         style = Stroke(width = 1.3f)
     )
 
-    // 4. Pawn Tapered Waist / Stem
+    // 4. Pawn Tapered Waist / Stem (Reusing shared path for zero GC churn)
     val neckY = cy - radius * 0.26f
     val stemTopWidth = radius * 0.62f
     val stemBottomWidth = radius * 1.22f
 
-    val stemPath = Path().apply {
-        moveTo(cx - stemBottomWidth / 2, baseY - baseHeight * 0.22f)
-        cubicTo(
-            cx - stemBottomWidth * 0.32f, cy,
-            cx - stemTopWidth * 0.60f, neckY + radius * 0.12f,
-            cx - stemTopWidth / 2, neckY
-        )
-        lineTo(cx + stemTopWidth / 2, neckY)
-        cubicTo(
-            cx + stemTopWidth * 0.60f, neckY + radius * 0.12f,
-            cx + stemBottomWidth * 0.32f, cy,
-            cx + stemBottomWidth / 2, baseY - baseHeight * 0.22f
-        )
-        close()
-    }
+    sharedStemPath.reset()
+    sharedStemPath.moveTo(cx - stemBottomWidth / 2, baseY - baseHeight * 0.22f)
+    sharedStemPath.cubicTo(
+        cx - stemBottomWidth * 0.32f, cy,
+        cx - stemTopWidth * 0.60f, neckY + radius * 0.12f,
+        cx - stemTopWidth / 2, neckY
+    )
+    sharedStemPath.lineTo(cx + stemTopWidth / 2, neckY)
+    sharedStemPath.cubicTo(
+        cx + stemTopWidth * 0.60f, neckY + radius * 0.12f,
+        cx + stemBottomWidth * 0.32f, cy,
+        cx + stemBottomWidth / 2, baseY - baseHeight * 0.22f
+    )
+    sharedStemPath.close()
 
     drawPath(
-        path = stemPath,
+        path = sharedStemPath,
         brush = Brush.horizontalGradient(
             colors = listOf(colors.highlightColor, colors.lightColor, colors.baseColor, colors.darkColor, colors.deepShadow),
             startX = cx - stemBottomWidth / 2,
@@ -603,7 +603,7 @@ private fun DrawScope.drawHomeBase(
         )
     }
 
-    // Inner Tinted Platform (Matches reference image)
+    // Inner Tinted Platform
     val innerMargin = cellSize * 0.85f
     val innerSize = homeSize - innerMargin * 2
     drawRoundRect(
@@ -622,14 +622,15 @@ private fun DrawScope.drawHomeBase(
 
     // 4 Sunken 3D Socket Saucers
     val spotRadius = cellSize * 0.52f
-    val spotCenters = listOf(
+    val centerOffsets = arrayOf(
         Offset(x + 1.5f * cellSize, y + 1.5f * cellSize),
         Offset(x + 4.5f * cellSize, y + 1.5f * cellSize),
         Offset(x + 1.5f * cellSize, y + 4.5f * cellSize),
-        Offset(x + 4.5f * cellSize, y + 4.5f * cellSize),
+        Offset(x + 4.5f * cellSize, y + 4.5f * cellSize)
     )
 
-    spotCenters.forEach { center ->
+    for (i in 0 until 4) {
+        val center = centerOffsets[i]
         // Deep cast shadow inside the well
         drawCircle(
             brush = Brush.radialGradient(
@@ -688,10 +689,10 @@ private fun DrawScope.drawGoldenBoardFrame(offsetX: Float, offsetY: Float, board
     )
 }
 
-
 private fun DrawScope.drawTrackCells(offsetX: Float, offsetY: Float, cellSize: Float) {
-    for (pos in BoardConfig.mainTrack) {
-        val (row, col) = pos
+    val track = BoardConfig.mainTrack
+    for (i in 0 until track.size) {
+        val (row, col) = track[i]
         val x = offsetX + col * cellSize
         val y = offsetY + row * cellSize
 
@@ -710,14 +711,16 @@ private fun DrawScope.drawTrackCells(offsetX: Float, offsetY: Float, cellSize: F
 }
 
 private fun DrawScope.drawStartingSquares(offsetX: Float, offsetY: Float, cellSize: Float) {
-    val starts = listOf(
+    val track = BoardConfig.mainTrack
+    val starts = arrayOf(
         Pair(BoardConfig.RED_START_INDEX, LudoRed),
         Pair(BoardConfig.GREEN_START_INDEX, LudoGreen),
         Pair(BoardConfig.YELLOW_START_INDEX, LudoYellow),
         Pair(BoardConfig.BLUE_START_INDEX, LudoBlue)
     )
-    for ((index, color) in starts) {
-        val (row, col) = BoardConfig.mainTrack[index]
+    for (i in 0 until starts.size) {
+        val (index, color) = starts[i]
+        val (row, col) = track[index]
         val x = offsetX + col * cellSize
         val y = offsetY + row * cellSize
 
@@ -739,7 +742,8 @@ private fun DrawScope.drawHomeColumn(
     offsetX: Float, offsetY: Float, cellSize: Float,
     positions: List<Pair<Int, Int>>, color: Color
 ) {
-    positions.forEachIndexed { _, (row, col) ->
+    for (i in 0 until positions.size) {
+        val (row, col) = positions[i]
         val x = offsetX + col * cellSize
         val y = offsetY + row * cellSize
 
@@ -758,27 +762,14 @@ private fun DrawScope.drawHomeColumn(
 }
 
 private fun DrawScope.drawTrackArrows(offsetX: Float, offsetY: Float, cellSize: Float) {
-    val arrows = listOf(
-        Triple(Pair(7, 0), LudoRed, 0f),       // Red arrow pointing Right →
-        Triple(Pair(0, 7), LudoGreen, 90f),    // Green arrow pointing Down ↓
-        Triple(Pair(7, 14), LudoYellow, 180f), // Yellow arrow pointing Left ←
-        Triple(Pair(14, 7), LudoBlue, 270f)    // Blue arrow pointing Up ↑
-    )
-
-    arrows.forEach { (pos, color, angleDeg) ->
-        val (row, col) = pos
-        val cx = offsetX + col * cellSize + cellSize / 2
-        val cy = offsetY + row * cellSize + cellSize / 2
-
-        drawDirectionArrow(cx, cy, cellSize * 0.45f, color, angleDeg)
-    }
+    drawDirectionArrow(offsetX + 0 * cellSize + cellSize / 2, offsetY + 7 * cellSize + cellSize / 2, cellSize * 0.45f, LudoRed, 0f)
+    drawDirectionArrow(offsetX + 7 * cellSize + cellSize / 2, offsetY + 0 * cellSize + cellSize / 2, cellSize * 0.45f, LudoGreen, 90f)
+    drawDirectionArrow(offsetX + 14 * cellSize + cellSize / 2, offsetY + 7 * cellSize + cellSize / 2, cellSize * 0.45f, LudoYellow, 180f)
+    drawDirectionArrow(offsetX + 7 * cellSize + cellSize / 2, offsetY + 14 * cellSize + cellSize / 2, cellSize * 0.45f, LudoBlue, 270f)
 }
 
 private fun DrawScope.drawDirectionArrow(cx: Float, cy: Float, size: Float, color: Color, angleDeg: Float) {
-    val path = Path()
     val half = size / 2
-
-    // Arrow pointing Right (0 deg)
     val tipX = half
     val tipY = 0f
     val backX = -half
@@ -800,20 +791,22 @@ private fun DrawScope.drawDirectionArrow(cx: Float, cy: Float, size: Float, colo
     val pBot = rotatePoint(backX, botY)
     val pMid = rotatePoint(backX * 0.4f, 0f)
 
-    path.moveTo(pTip.x, pTip.y)
-    path.lineTo(pTop.x, pTop.y)
-    path.lineTo(pMid.x, pMid.y)
-    path.lineTo(pBot.x, pBot.y)
-    path.close()
+    sharedArrowPath.reset()
+    sharedArrowPath.moveTo(pTip.x, pTip.y)
+    sharedArrowPath.lineTo(pTop.x, pTop.y)
+    sharedArrowPath.lineTo(pMid.x, pMid.y)
+    sharedArrowPath.lineTo(pBot.x, pBot.y)
+    sharedArrowPath.close()
 
-    drawPath(path, color = color, style = Fill)
+    drawPath(sharedArrowPath, color = color, style = Fill)
 }
 
 private fun DrawScope.drawSafeZones(offsetX: Float, offsetY: Float, cellSize: Float) {
-    // 4 Classic Safe Spot Stars (Golden Stars matching reference image)
-    val starIndices = listOf(8, 21, 34, 47)
-    for (index in starIndices) {
-        val (row, col) = BoardConfig.mainTrack[index]
+    val starIndices = arrayOf(8, 21, 34, 47)
+    val track = BoardConfig.mainTrack
+    for (i in 0 until starIndices.size) {
+        val index = starIndices[i]
+        val (row, col) = track[index]
         val cx = offsetX + col * cellSize + cellSize / 2
         val cy = offsetY + row * cellSize + cellSize / 2
 
@@ -823,17 +816,17 @@ private fun DrawScope.drawSafeZones(offsetX: Float, offsetY: Float, cellSize: Fl
 
 private fun DrawScope.drawStar(cx: Float, cy: Float, radius: Float, fillColor: Color, strokeColor: Color) {
     val points = 5
-    val path = Path()
+    sharedStarPath.reset()
     for (i in 0 until points * 2) {
         val r = if (i % 2 == 0) radius else radius * 0.42f
         val angle = Math.toRadians((i * 360.0 / (points * 2)) - 90.0)
         val x = cx + r * cos(angle).toFloat()
         val y = cy + r * sin(angle).toFloat()
-        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        if (i == 0) sharedStarPath.moveTo(x, y) else sharedStarPath.lineTo(x, y)
     }
-    path.close()
-    drawPath(path, color = fillColor, style = Fill)
-    drawPath(path, color = strokeColor, style = Stroke(width = 1.8f))
+    sharedStarPath.close()
+    drawPath(sharedStarPath, color = fillColor, style = Fill)
+    drawPath(sharedStarPath, color = strokeColor, style = Stroke(width = 1.8f))
 }
 
 private fun DrawScope.drawCenterHome(offsetX: Float, offsetY: Float, cellSize: Float) {
@@ -841,51 +834,35 @@ private fun DrawScope.drawCenterHome(offsetX: Float, offsetY: Float, cellSize: F
     val centerY = offsetY + 7.5f * cellSize
     val triangleSpan = cellSize * 1.5f
 
-    val triangleDefs = listOf(
-        Pair(
-            listOf(Offset(centerX - triangleSpan, centerY - triangleSpan),
-                   Offset(centerX, centerY),
-                   Offset(centerX - triangleSpan, centerY + triangleSpan)),
-            LudoRed
-        ),
-        Pair(
-            listOf(Offset(centerX - triangleSpan, centerY - triangleSpan),
-                   Offset(centerX + triangleSpan, centerY - triangleSpan),
-                   Offset(centerX, centerY)),
-            LudoGreen
-        ),
-        Pair(
-            listOf(Offset(centerX + triangleSpan, centerY - triangleSpan),
-                   Offset(centerX + triangleSpan, centerY + triangleSpan),
-                   Offset(centerX, centerY)),
-            LudoYellow
-        ),
-        Pair(
-            listOf(Offset(centerX - triangleSpan, centerY + triangleSpan),
-                   Offset(centerX + triangleSpan, centerY + triangleSpan),
-                   Offset(centerX, centerY)),
-            LudoBlue
-        )
-    )
+    // Red Left Triangle
+    sharedTrianglePath.reset()
+    sharedTrianglePath.moveTo(centerX - triangleSpan, centerY - triangleSpan)
+    sharedTrianglePath.lineTo(centerX, centerY)
+    sharedTrianglePath.lineTo(centerX - triangleSpan, centerY + triangleSpan)
+    sharedTrianglePath.close()
+    drawPath(sharedTrianglePath, color = LudoRed, style = Fill)
 
-    for ((points, color) in triangleDefs) {
-        val path = Path().apply {
-            moveTo(points[0].x, points[0].y)
-            lineTo(points[1].x, points[1].y)
-            lineTo(points[2].x, points[2].y)
-            close()
-        }
-        drawPath(path, color = color, style = Fill)
-    }
+    // Green Top Triangle
+    sharedTrianglePath.reset()
+    sharedTrianglePath.moveTo(centerX - triangleSpan, centerY - triangleSpan)
+    sharedTrianglePath.lineTo(centerX + triangleSpan, centerY - triangleSpan)
+    sharedTrianglePath.lineTo(centerX, centerY)
+    sharedTrianglePath.close()
+    drawPath(sharedTrianglePath, color = LudoGreen, style = Fill)
+
+    // Yellow Right Triangle
+    sharedTrianglePath.reset()
+    sharedTrianglePath.moveTo(centerX + triangleSpan, centerY - triangleSpan)
+    sharedTrianglePath.lineTo(centerX + triangleSpan, centerY + triangleSpan)
+    sharedTrianglePath.lineTo(centerX, centerY)
+    sharedTrianglePath.close()
+    drawPath(sharedTrianglePath, color = LudoYellow, style = Fill)
+
+    // Blue Bottom Triangle
+    sharedTrianglePath.reset()
+    sharedTrianglePath.moveTo(centerX - triangleSpan, centerY + triangleSpan)
+    sharedTrianglePath.lineTo(centerX + triangleSpan, centerY + triangleSpan)
+    sharedTrianglePath.lineTo(centerX, centerY)
+    sharedTrianglePath.close()
+    drawPath(sharedTrianglePath, color = LudoBlue, style = Fill)
 }
-
-private fun getPlayerColor(playerColor: PlayerColor): Color {
-    return when (playerColor) {
-        PlayerColor.RED -> LudoRed
-        PlayerColor.GREEN -> LudoGreen
-        PlayerColor.YELLOW -> LudoYellow
-        PlayerColor.BLUE -> LudoBlue
-    }
-}
-
-

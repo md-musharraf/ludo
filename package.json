@@ -1,0 +1,23 @@
+{
+  "name": "ludo-mobile",
+  "version": "1.0.0",
+  "description": "High-Performance Classic Ludo Mobile Game with 3D Aesthetics and Zero-Lag Architecture",
+  "scripts": {
+    "test": "gradlew.bat test",
+    "lint": "gradlew.bat lintDebug",
+    "build": "gradlew.bat assembleDebug",
+    "prepare": "npx husky install"
+  },
+  "keywords": [
+    "ludo",
+    "android",
+    "jetpack-compose",
+    "kotlin",
+    "mobile-optimized"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

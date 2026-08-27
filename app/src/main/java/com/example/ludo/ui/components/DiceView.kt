@@ -8,7 +8,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,16 +17,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.ludo.theme.*
 import kotlinx.coroutines.delay
 
 /**
- * Rock-solid Classic Physical Dice Cup & 3D Ivory Dice Component.
- * Fixed-size container with GPU-accelerated graphicsLayer animations to prevent any layout shifts.
+ * Mobile-Optimized Classic Physical Dice Cup & 3D Ivory Dice Component.
+ * - Hardware-accelerated GPU graphicsLayer transforms.
+ * - Guarded animations: 0% CPU overhead when inactive or waiting.
+ * - Single-pass pip rendering.
  */
 @Composable
 fun DiceView(
@@ -39,51 +38,65 @@ fun DiceView(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "classicDiceCupAnim")
+    val infiniteTransition = rememberInfiniteTransition(label = "diceAnim")
 
-    // Cup shaker tilt oscillation during rolling
-    val cupTilt by infiniteTransition.animateFloat(
-        initialValue = -12f,
-        targetValue = 12f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(80, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "cupTilt"
-    )
+    // Animate rotation & tilt ONLY when actively rolling
+    val cupTilt by if (isRolling) {
+        infiniteTransition.animateFloat(
+            initialValue = -12f,
+            targetValue = 12f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(80, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "cupTilt"
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
 
-    // Dice rapid tumbling rotation
-    val rollingRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 720f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(450, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "rollingRotation"
-    )
+    val rollingRotation by if (isRolling) {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 720f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(450, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "rollingRotation"
+        )
+    } else {
+        remember { mutableFloatStateOf(0f) }
+    }
 
-    // Elastic scaling while shaking
-    val rollingScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(120, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "rollingScale"
-    )
+    val rollingScale by if (isRolling) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.92f,
+            targetValue = 1.08f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(120, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "rollingScale"
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }
 
-    // Smooth breathing glow for active turn
-    val glowAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.4f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(750, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "glowAlpha"
-    )
+    // Breathing glow ONLY when enabled for active player
+    val glowAlpha by if (enabled) {
+        infiniteTransition.animateFloat(
+            initialValue = 0.4f,
+            targetValue = 1.0f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(750, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "glowAlpha"
+        )
+    } else {
+        remember { mutableFloatStateOf(0.4f) }
+    }
 
     // Spring-damped landing bounce when roll finishes
     val landingScale by animateFloatAsState(
@@ -185,7 +198,6 @@ fun DiceView(
                             spotColor = Color.Black
                         )
                         .clip(RoundedCornerShape(8.dp))
-                        // Ivory surface with multi-stop top-light gradient
                         .background(
                             Brush.linearGradient(
                                 colors = listOf(
@@ -212,24 +224,20 @@ fun DiceView(
                         val bottomLeft = Offset(margin, this.size.height - margin)
                         val bottomRight = Offset(this.size.width - margin, this.size.height - margin)
 
-                        // Classic Ludo Pip Colors: Jewel Ruby Red for 1 & 6, Obsidian Black for 2, 3, 4, 5
                         val isRedFace = displayedNumber == 1 || displayedNumber == 6
                         val pipColor = if (isRedFace) LudoRed else Color(0xFF1E1E1E)
 
                         fun drawPip(pos: Offset) {
-                            // Pip bevel depth shadow
                             drawCircle(
                                 color = Color(0x33000000),
                                 radius = dotRadius * 1.15f,
                                 center = Offset(pos.x + 0.8f, pos.y + 0.8f)
                             )
-                            // Pip core body
                             drawCircle(
                                 color = pipColor,
                                 radius = dotRadius,
                                 center = pos
                             )
-                            // Pip specular highlight
                             drawCircle(
                                 color = Color.White.copy(alpha = 0.65f),
                                 radius = dotRadius * 0.35f,
@@ -276,4 +284,3 @@ fun DiceView(
         }
     }
 }
-
