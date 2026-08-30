@@ -208,74 +208,85 @@ fun LudoBoard(
             }
         }
 
-        // 11. Collect Board Tokens with Stacking
-        val boardTokensByCell = HashMap<Pair<Int, Int>, ArrayList<Pair<Player, Token>>>()
+        // 11. Collect Board Tokens with Zero-GC Stacking
+        val boardTokens = ArrayList<Pair<Player, Token>>(16)
         for (player in gameState.players) {
             for (token in player.tokens) {
                 if (token.state == TokenState.ON_BOARD || token.state == TokenState.IN_HOME_COLUMN) {
-                    token.boardPosition?.let { pos ->
-                        boardTokensByCell.getOrPut(pos) { ArrayList() }.add(Pair(player, token))
+                    if (token.boardPosition != null) {
+                        // Exclude token from static board rendering if currently in active hop animation
+                        if (!(gameState.animatingTokenId == token.id && gameState.animatingPlayerId == player.id && gameState.animatingFromPos != null)) {
+                            boardTokens.add(Pair(player, token))
+                        }
                     }
                 }
             }
         }
 
-        for ((cellPos, tokensInCell) in boardTokensByCell) {
-            val (row, col) = cellPos
+        for (i in 0 until boardTokens.size) {
+            val (player, token) = boardTokens[i]
+            val pos = token.boardPosition ?: continue
+            val (row, col) = pos
             val cellCenterX = offsetX + col * cellSize + cellSize / 2
             val cellCenterY = offsetY + row * cellSize + cellSize / 2
-            val count = tokensInCell.size
 
-            tokensInCell.forEachIndexed { index, (player, token) ->
-                if (gameState.animatingTokenId == token.id && gameState.animatingPlayerId == player.id && gameState.animatingFromPos != null) {
-                    return@forEachIndexed
+            // Count total tokens on this cell and current token's relative index on cell
+            var totalOnCell = 0
+            var indexOnCell = 0
+            for (j in 0 until boardTokens.size) {
+                if (boardTokens[j].second.boardPosition == pos) {
+                    if (j == i) {
+                        indexOnCell = totalOnCell
+                    }
+                    totalOnCell++
                 }
-
-                val (offsetXShift, offsetYShift, tokenRadius) = when (count) {
-                    1 -> Triple(0f, 0f, cellSize * 0.44f)
-                    2 -> {
-                        val d = cellSize * 0.16f
-                        if (index == 0) Triple(-d, -d, cellSize * 0.32f)
-                        else Triple(d, d, cellSize * 0.32f)
-                    }
-                    3 -> {
-                        val d = cellSize * 0.16f
-                        when (index) {
-                            0 -> Triple(0f, -d, cellSize * 0.28f)
-                            1 -> Triple(-d, d * 0.9f, cellSize * 0.28f)
-                            else -> Triple(d, d * 0.9f, cellSize * 0.28f)
-                        }
-                    }
-                    else -> {
-                        val d = cellSize * 0.18f
-                        when (index % 4) {
-                            0 -> Triple(-d, -d, cellSize * 0.24f)
-                            1 -> Triple(d, -d, cellSize * 0.24f)
-                            2 -> Triple(-d, d, cellSize * 0.24f)
-                            else -> Triple(d, d, cellSize * 0.24f)
-                        }
-                    }
-                }
-
-                val cx = cellCenterX + offsetXShift
-                val cy = cellCenterY + offsetYShift
-                val isCurr = player.id == currentPlayer?.id
-                val isValid = isCurr && gameState.validMoves.contains(token.id) && gameState.gamePhase == GamePhase.WAITING_FOR_MOVE
-
-                tokenList.add(
-                    TokenRenderInfo(
-                        playerId = player.id,
-                        tokenId = token.id,
-                        playerColor = player.color,
-                        center = Offset(cx, cy),
-                        radius = tokenRadius,
-                        isValid = isValid,
-                        isCurrentPlayer = isCurr,
-                        groundCenter = Offset(cx, cy)
-                    )
-                )
             }
+
+            val (offsetXShift, offsetYShift, tokenRadius) = when (totalOnCell) {
+                1 -> Triple(0f, 0f, cellSize * 0.44f)
+                2 -> {
+                    val d = cellSize * 0.16f
+                    if (indexOnCell == 0) Triple(-d, -d, cellSize * 0.32f)
+                    else Triple(d, d, cellSize * 0.32f)
+                }
+                3 -> {
+                    val d = cellSize * 0.16f
+                    when (indexOnCell) {
+                        0 -> Triple(0f, -d, cellSize * 0.28f)
+                        1 -> Triple(-d, d * 0.9f, cellSize * 0.28f)
+                        else -> Triple(d, d * 0.9f, cellSize * 0.28f)
+                    }
+                }
+                else -> {
+                    val d = cellSize * 0.18f
+                    when (indexOnCell % 4) {
+                        0 -> Triple(-d, -d, cellSize * 0.24f)
+                        1 -> Triple(d, -d, cellSize * 0.24f)
+                        2 -> Triple(-d, d, cellSize * 0.24f)
+                        else -> Triple(d, d, cellSize * 0.24f)
+                    }
+                }
+            }
+
+            val cx = cellCenterX + offsetXShift
+            val cy = cellCenterY + offsetYShift
+            val isCurr = player.id == currentPlayer?.id
+            val isValid = isCurr && gameState.validMoves.contains(token.id) && gameState.gamePhase == GamePhase.WAITING_FOR_MOVE
+
+            tokenList.add(
+                TokenRenderInfo(
+                    playerId = player.id,
+                    tokenId = token.id,
+                    playerColor = player.color,
+                    center = Offset(cx, cy),
+                    radius = tokenRadius,
+                    isValid = isValid,
+                    isCurrentPlayer = isCurr,
+                    groundCenter = Offset(cx, cy)
+                )
+            )
         }
+
 
         // 12. Silky Smooth Sinusoidal Physics Hop Animation
         if (gameState.animatingPlayerId != null && gameState.animatingTokenId != null &&

@@ -13,7 +13,12 @@ class LudoEngineTest {
         assertEquals("There must be 4 home base positions", 4, BoardConfig.homePositions.size)
     }
 
-
+    @Test
+    fun testPathMapperPrecomputedZeroAllocationIdentity() {
+        val redPath1 = PathMapper.getPlayerPath(0)
+        val redPath2 = PathMapper.getPlayerPath(0)
+        assertSame("Repeated calls to getPlayerPath must return identical cached list instance", redPath1, redPath2)
+    }
 
     @Test
     fun testPathMapperForRed() {
@@ -70,6 +75,30 @@ class LudoEngineTest {
     }
 
     @Test
+    fun testMoveValidatorBlockadeDetection() {
+        val validator = MoveValidator()
+        val redPath = PathMapper.getPlayerPath(0)
+        val targetPos = redPath[5] // Cell index 5 (not a safe spot)
+
+        // Opponent (Green) has 2 tokens at that exact cell
+        val greenToken1 = Token(id = 0, playerId = 1, state = TokenState.ON_BOARD, boardPosition = targetPos)
+        val greenToken2 = Token(id = 1, playerId = 1, state = TokenState.ON_BOARD, boardPosition = targetPos)
+        val greenPlayer = Player(id = 1, color = PlayerColor.GREEN, name = "Green", isAI = false, tokens = listOf(greenToken1, greenToken2))
+
+        val redToken = Token(id = 0, playerId = 0, state = TokenState.ON_BOARD, positionIndex = 2, boardPosition = redPath[2])
+        val redPlayer = Player(id = 0, color = PlayerColor.RED, name = "Red", isAI = false, tokens = listOf(redToken))
+
+        val stateWithBlockade = GameState(
+            players = listOf(redPlayer, greenPlayer),
+            currentPlayerIndex = 0,
+            diceResult = DiceResult(3), // 2 + 3 = 5 (landing on blockade)
+            gamePhase = GamePhase.WAITING_FOR_MOVE
+        )
+
+        assertFalse("Cannot land on 2 opponent tokens on regular track (Blockade)", validator.isValidMove(redToken, 3, stateWithBlockade))
+    }
+
+    @Test
     fun testGameEngineReset() {
         val engine = GameEngine()
         engine.resetGame(playerCount = 4, isVsAI = true, aiDifficulty = "Hard")
@@ -93,7 +122,17 @@ class LudoEngineTest {
         assertEquals("Player 2 should be YELLOW (opposite)", PlayerColor.YELLOW, state.players[1].color)
     }
 
+    @Test
+    fun testThreePlayerModeColors() {
+        val engine = GameEngine()
+        engine.resetGame(playerCount = 3, isVsAI = false)
 
+        val state = engine.state.value
+        assertEquals("Must have 3 players", 3, state.players.size)
+        assertEquals("Player 1: RED", PlayerColor.RED, state.players[0].color)
+        assertEquals("Player 2: GREEN", PlayerColor.GREEN, state.players[1].color)
+        assertEquals("Player 3: YELLOW", PlayerColor.YELLOW, state.players[2].color)
+    }
 
     @Test
     fun testCapturedTokenEventStructure() {
@@ -125,3 +164,4 @@ class LudoEngineTest {
         assertTrue(valid.containsAll(listOf(0, 1, 2, 3)))
     }
 }
+

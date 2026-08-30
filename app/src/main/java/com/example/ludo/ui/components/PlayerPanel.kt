@@ -165,42 +165,13 @@ private fun PlayerCard(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // 4 Token Dots
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                player.tokens.forEach { tok ->
-                    when (tok.state) {
-                        TokenState.FINISHED -> {
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .clip(CircleShape)
-                                    .background(color)
-                                    .border(1.dp, Color.White, CircleShape)
-                            )
-                        }
-                        TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> {
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .clip(CircleShape)
-                                    .background(Color.White)
-                                    .border(2.dp, color, CircleShape)
-                            )
-                        }
-                        TokenState.IN_HOME -> {
-                            Box(
-                                modifier = Modifier
-                                    .size(9.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFFD0D0D0))
-                            )
-                        }
-                    }
-                }
-            }
+            TokenIndicatorRow(
+                tokens = player.tokens,
+                playerColor = color,
+                dotSize = 9.dp,
+                spacing = 3.dp
+            )
         }
     }
 }
+

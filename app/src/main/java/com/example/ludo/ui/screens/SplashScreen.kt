@@ -62,7 +62,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
         onSplashFinished()
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -76,6 +76,14 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             ),
         contentAlignment = Alignment.Center
     ) {
+        val isCompact = maxHeight < 680.dp
+        val emblemSize = if (isCompact) 105.dp else 130.dp
+        val centerDiceSize = if (isCompact) 44.dp else 54.dp
+        val centerDiceFont = if (isCompact) 20.sp else 26.sp
+        val letterBoxSize = if (isCompact) 46.dp else 56.dp
+        val letterFontSize = if (isCompact) 26.sp else 32.sp
+        val verticalSpacer = if (isCompact) 20.dp else 36.dp
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -84,13 +92,13 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(130.dp)
+                    .size(emblemSize)
                     .scale(diceScale)
                     .rotate(diceRotation)
-                    .shadow(16.dp, RoundedCornerShape(32.dp))
-                    .clip(RoundedCornerShape(32.dp))
+                    .shadow(16.dp, RoundedCornerShape(28.dp))
+                    .clip(RoundedCornerShape(28.dp))
                     .background(Color.White)
-                    .border(3.dp, Color(0xFFE0E0E0), RoundedCornerShape(32.dp))
+                    .border(3.dp, Color(0xFFE0E0E0), RoundedCornerShape(28.dp))
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Row(modifier = Modifier.weight(1f)) {
@@ -105,58 +113,59 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
                 Box(
                     modifier = Modifier
-                        .size(54.dp)
+                        .size(centerDiceSize)
                         .clip(CircleShape)
                         .background(Color.White)
                         .border(3.dp, Color(0xFFFFD700), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("🎲", fontSize = 26.sp)
+                    Text("🎲", fontSize = centerDiceFont)
                 }
             }
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(verticalSpacer))
 
             Row(
                 modifier = Modifier.scale(titleScale),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SplashLetter("L", LudoRed)
-                SplashLetter("U", LudoGreen)
-                SplashLetter("D", LudoYellow)
-                SplashLetter("O", LudoBlue)
+                SplashLetter("L", LudoRed, letterBoxSize, letterFontSize)
+                SplashLetter("U", LudoGreen, letterBoxSize, letterFontSize)
+                SplashLetter("D", LudoYellow, letterBoxSize, letterFontSize)
+                SplashLetter("O", LudoBlue, letterBoxSize, letterFontSize)
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
 
             Text(
                 text = "SUPER LUDO MASTER",
-                fontSize = 13.sp,
+                fontSize = if (isCompact) 11.sp else 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF6D4C41),
-                letterSpacing = 3.sp
+                letterSpacing = if (isCompact) 2.5.sp else 3.sp
             )
         }
     }
 }
 
 @Composable
-private fun SplashLetter(char: String, color: Color) {
+private fun SplashLetter(char: String, color: Color, size: androidx.compose.ui.unit.Dp = 56.dp, fontSize: androidx.compose.ui.unit.TextUnit = 32.sp) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
-            .size(56.dp)
-            .shadow(6.dp, RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
+            .size(size)
+            .shadow(6.dp, RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(14.dp))
             .background(color)
-            .border(2.dp, Color.White, RoundedCornerShape(16.dp))
+            .border(2.dp, Color.White, RoundedCornerShape(14.dp))
     ) {
         Text(
             text = char,
-            fontSize = 32.sp,
+            fontSize = fontSize,
             fontWeight = FontWeight.Black,
             color = Color.White
         )
     }
 }
+

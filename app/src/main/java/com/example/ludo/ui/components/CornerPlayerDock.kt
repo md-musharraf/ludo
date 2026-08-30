@@ -170,40 +170,12 @@ private fun PlayerInfoSection(
 
         Spacer(modifier = Modifier.height(3.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            player.tokens.forEach { tok ->
-                when (tok.state) {
-                    TokenState.FINISHED -> {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(playerColor)
-                                .border(1.dp, SafeZoneStar, CircleShape)
-                        )
-                    }
-                    TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(Color.White)
-                                .border(1.8.dp, playerColor, CircleShape)
-                        )
-                    }
-                    TokenState.IN_HOME -> {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(Color(0xFFCFD8DC))
-                        )
-                    }
-                }
-            }
-        }
+        TokenIndicatorRow(
+            tokens = player.tokens,
+            playerColor = playerColor,
+            dotSize = 8.dp,
+            spacing = 3.dp
+        )
     }
 }
+

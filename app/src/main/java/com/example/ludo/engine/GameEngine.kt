@@ -3,16 +3,18 @@ package com.example.ludo.engine
 import com.example.ludo.audio.SoundEffectManager
 import com.example.ludo.core.logging.AppLogger
 import com.example.ludo.model.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
+/**
+ * Robust, high-performance Game Engine for Ludo.
+ * - Thread-safe atomic StateFlow updates.
+ * - Managed Job cancellation preventing background coroutine leaks on game reset.
+ * - Strict guard clauses against rapid-tap race conditions and unauthorized move executions.
+ */
 class GameEngine {
     private val _state = MutableStateFlow(GameState())
     val state: StateFlow<GameState> = _state.asStateFlow()
@@ -20,8 +22,10 @@ class GameEngine {
     private val moveValidator = MoveValidator()
     private val engineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var aiPlayer: AIPlayer? = null
+    private var currentActionJob: Job? = null
 
     fun resetGame(playerCount: Int, isVsAI: Boolean, aiDifficulty: String = "Hard") {
+        currentActionJob?.cancel()
         AppLogger.i("GameEngine") { "Resetting game: players=$playerCount, isVsAI=$isVsAI, difficulty=$aiDifficulty" }
 
         val selectedColors = when (playerCount) {
@@ -30,7 +34,7 @@ class GameEngine {
             else -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE)
         }
 
-        val players = mutableListOf<Player>()
+        val players = ArrayList<Player>(selectedColors.size)
         for (i in selectedColors.indices) {
             val color = selectedColors[i]
             val isAI = isVsAI && i > 0
@@ -39,7 +43,7 @@ class GameEngine {
                 Token(
                     id = tokenId,
                     playerId = colorOrdinal,
-                    boardPosition = BoardConfig.homePositions[colorOrdinal]?.get(tokenId)
+                    boardPosition = BoardConfig.homePositions[colorOrdinal]?.getOrNull(tokenId)
                 )
             }
             val defaultName = if (isAI) "Bot ${color.name.lowercase().replaceFirstChar { it.uppercase() }}"
@@ -60,7 +64,7 @@ class GameEngine {
             players = players,
             currentPlayerIndex = 0,
             gamePhase = GamePhase.WAITING_FOR_ROLL,
-            moveMessage = "${players[0].name}'s turn! Roll your corner dice 🎲"
+            moveMessage = "${players.firstOrNull()?.name ?: "Player"}'s turn! Roll your corner dice 🎲"
         )
 
         aiPlayer = if (isVsAI) AIPlayer(this, aiDifficulty) else null
@@ -71,8 +75,9 @@ class GameEngine {
     fun rollDice() {
         val currentState = _state.value
         if (currentState.gamePhase != GamePhase.WAITING_FOR_ROLL || currentState.isGameOver) return
+        if (currentState.isDiceRollingForPlayer != null) return // Debounce roll attempts
 
-        val currentPlayer = currentState.players[currentState.currentPlayerIndex]
+        val currentPlayer = currentState.players.getOrNull(currentState.currentPlayerIndex) ?: return
         AppLogger.d("GameEngine") { "${currentPlayer.name} initiated dice roll" }
 
         _state.update {
@@ -84,8 +89,9 @@ class GameEngine {
 
         SoundEffectManager.playDiceRoll()
 
-        engineScope.launch {
-            delay(500) // Fast and fluid dice tumble duration
+        currentActionJob?.cancel()
+        currentActionJob = engineScope.launch {
+            delay(480) // Fluid physical dice tumble duration
 
             val roll = (1..6).random()
             AppLogger.i("GameEngine") { "${currentPlayer.name} rolled: $roll" }
@@ -110,7 +116,7 @@ class GameEngine {
                         moveMessage = "Rolled a $roll. No valid moves!"
                     )
                 }
-                delay(900)
+                delay(850)
                 nextTurn()
             } else {
                 val consecutive = if (roll == 6) currentState.consecutiveSixes + 1 else 0
@@ -125,7 +131,7 @@ class GameEngine {
                             moveMessage = "Three 6s! Turn forfeited ⚠️"
                         )
                     }
-                    delay(900)
+                    delay(850)
                     nextTurn()
                 } else {
                     val extraRollText = if (roll == 6) " (Bonus roll on 6!)" else ""
@@ -157,7 +163,7 @@ class GameEngine {
                                     moveMessage = "${currentPlayer.name} rolled $roll! Auto-moving piece...$extraRollText"
                                 )
                             }
-                            delay(300)
+                            delay(280)
                             selectToken(autoTokenId)
                         } else {
                             _state.update {
@@ -184,7 +190,7 @@ class GameEngine {
         if (!currentState.validMoves.contains(tokenId)) return
 
         val playerIndex = currentState.currentPlayerIndex
-        val player = currentState.players[playerIndex]
+        val player = currentState.players.getOrNull(playerIndex) ?: return
         val colorOrdinal = player.color.ordinal
         val tokenIndex = player.tokens.indexOfFirst { it.id == tokenId }
         if (tokenIndex == -1) return
@@ -205,14 +211,15 @@ class GameEngine {
             )
         }
 
-        engineScope.launch {
+        currentActionJob?.cancel()
+        currentActionJob = engineScope.launch {
             val path = PathMapper.getPlayerPath(colorOrdinal)
 
             if (token.state == TokenState.IN_HOME) {
                 SoundEffectManager.playLeaveBase()
                 val targetBoardPos = path[0]
 
-                val homeSpot = BoardConfig.homePositions[colorOrdinal]?.get(token.id) ?: Pair(0, 0)
+                val homeSpot = BoardConfig.homePositions[colorOrdinal]?.getOrNull(token.id) ?: Pair(0, 0)
                 animateHopFrames(player.id, tokenId, homeSpot, targetBoardPos, frames = 8)
 
                 val updatedToken = token.copy(
@@ -221,7 +228,7 @@ class GameEngine {
                     boardPosition = targetBoardPos
                 )
                 updateToken(playerIndex, tokenIndex, updatedToken)
-                delay(80)
+                delay(60)
                 handlePostMove(playerIndex, updatedToken)
             } else {
                 var currentPos = token.positionIndex
@@ -281,8 +288,9 @@ class GameEngine {
 
     private fun updateToken(playerIndex: Int, tokenIndex: Int, token: Token) {
         val players = _state.value.players.toMutableList()
-        val player = players[playerIndex]
+        val player = players.getOrNull(playerIndex) ?: return
         val tokens = player.tokens.toMutableList()
+        if (tokenIndex !in tokens.indices) return
         tokens[tokenIndex] = token
 
         val hasFinished = tokens.all { it.state == TokenState.FINISHED }
@@ -291,7 +299,7 @@ class GameEngine {
     }
 
     private suspend fun handlePostMove(playerIndex: Int, token: Token) {
-        val currentPlayer = _state.value.players[playerIndex]
+        val currentPlayer = _state.value.players.getOrNull(playerIndex) ?: return
         var extraTurn = false
         var captureMessage = ""
 
@@ -322,7 +330,7 @@ class GameEngine {
                     if (oppToken.state == TokenState.ON_BOARD && oppToken.boardPosition == token.boardPosition) {
                         AppLogger.i("GameEngine") { "${currentPlayer.name} captured ${opp.name}'s token ${oppToken.id} at ${token.boardPosition}" }
                         SoundEffectManager.playCapture()
-                        val homeDest = BoardConfig.homePositions[oppColorOrdinal]?.get(oppToken.id) ?: Pair(0, 0)
+                        val homeDest = BoardConfig.homePositions[oppColorOrdinal]?.getOrNull(oppToken.id) ?: Pair(0, 0)
 
                         val captureEvent = CapturedTokenEvent(
                             playerId = opp.id,
@@ -350,7 +358,7 @@ class GameEngine {
             if (captured) {
                 captureMessage = " 💥 CAPTURED an opponent! Bonus turn!"
                 _state.update { it.copy(players = players) }
-                delay(500)
+                delay(450)
             }
         }
 
@@ -430,9 +438,10 @@ class GameEngine {
     private fun checkAI() {
         val state = _state.value
         if (state.isGameOver || state.players.isEmpty()) return
-        val player = state.players[state.currentPlayerIndex]
+        val player = state.players.getOrNull(state.currentPlayerIndex) ?: return
         if (player.isAI && state.gamePhase == GamePhase.WAITING_FOR_ROLL) {
-            engineScope.launch {
+            currentActionJob?.cancel()
+            currentActionJob = engineScope.launch {
                 aiPlayer?.executeRoll()
             }
         }
@@ -440,3 +449,4 @@ class GameEngine {
 
     fun getValidMoves(): List<Int> = _state.value.validMoves
 }
+

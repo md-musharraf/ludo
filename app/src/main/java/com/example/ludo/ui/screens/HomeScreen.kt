@@ -35,7 +35,7 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
         label = "startScale"
     )
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -48,33 +48,38 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                 )
             )
     ) {
+        val isCompact = maxHeight < 680.dp
+        val horizontalPadding = if (isCompact) 16.dp else 24.dp
+        val titleSize = if (isCompact) 44.sp else 54.sp
+        val titleSpacer = if (isCompact) 18.dp else 32.dp
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
-                .padding(24.dp),
+                .padding(horizontal = horizontalPadding, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Title
+            // Classic Logo Title
             Row {
-                Text("L", color = LudoRed, fontSize = 56.sp, fontWeight = FontWeight.Black)
-                Text("U", color = LudoGreen, fontSize = 56.sp, fontWeight = FontWeight.Black)
-                Text("D", color = LudoYellow, fontSize = 56.sp, fontWeight = FontWeight.Black)
-                Text("O", color = LudoBlue, fontSize = 56.sp, fontWeight = FontWeight.Black)
+                Text("L", color = LudoRed, fontSize = titleSize, fontWeight = FontWeight.Black)
+                Text("U", color = LudoGreen, fontSize = titleSize, fontWeight = FontWeight.Black)
+                Text("D", color = LudoYellow, fontSize = titleSize, fontWeight = FontWeight.Black)
+                Text("O", color = LudoBlue, fontSize = titleSize, fontWeight = FontWeight.Black)
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
             Text(
                 text = "SUPER LUDO MASTER",
-                fontSize = 13.sp,
+                fontSize = if (isCompact) 11.sp else 13.sp,
                 color = Color(0xFF6D4C41),
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 4.sp
+                letterSpacing = if (isCompact) 3.sp else 4.sp
             )
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(titleSpacer))
 
             // Settings card
             Card(
@@ -84,27 +89,28 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                 elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(20.dp),
+                    modifier = Modifier.padding(if (isCompact) 14.dp else 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "Number of Players",
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
+                        fontSize = if (isCompact) 14.sp else 16.sp,
                         color = Color(0xFF3E2723)
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 14.dp)
                     ) {
                         listOf(2, 3, 4).forEach { count ->
                             val isSelected = playerCount == count
+                            val circleSize = if (isCompact) 48.dp else 56.dp
                             Box(
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier
-                                    .size(56.dp)
+                                    .size(circleSize)
                                     .clip(CircleShape)
                                     .background(
                                         if (isSelected) LudoGreen.copy(alpha = 0.15f) else Color(0xFFF5F5F5)
@@ -121,7 +127,7 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                             ) {
                                 Text(
                                     text = "$count",
-                                    fontSize = 20.sp,
+                                    fontSize = if (isCompact) 18.sp else 20.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (isSelected) LudoGreen else Color(0xFF757575)
                                 )
@@ -129,19 +135,19 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(if (isCompact) 14.dp else 22.dp))
 
                     Text(
                         text = "Game Mode",
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 16.sp,
+                        fontSize = if (isCompact) 14.sp else 16.sp,
                         color = Color(0xFF3E2723)
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         ModeButton(
@@ -167,19 +173,19 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                     }
 
                     if (isVsAI) {
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(if (isCompact) 12.dp else 18.dp))
 
                         Text(
                             text = "AI Difficulty",
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
+                            fontSize = if (isCompact) 14.sp else 16.sp,
                             color = Color(0xFF3E2723)
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
 
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             ModeButton(
@@ -207,7 +213,7 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(if (isCompact) 18.dp else 28.dp))
 
             // Start button
             Button(
@@ -217,7 +223,7 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(58.dp)
+                    .height(if (isCompact) 50.dp else 58.dp)
                     .scale(startScale),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -230,13 +236,14 @@ fun HomeScreen(onStartGame: (Int, Boolean, String) -> Unit) {
             ) {
                 Text(
                     text = "🎲  START GAME",
-                    fontSize = 20.sp,
+                    fontSize = if (isCompact) 18.sp else 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
             }
         }
     }
+
 }
 
 @Composable

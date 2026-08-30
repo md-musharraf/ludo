@@ -47,7 +47,7 @@ fun GameScreen(
     val currentPlayer = gameState.players.getOrNull(gameState.currentPlayerIndex)
     val currentPlayerColor = PlayerColorUtils.getComposeColor(currentPlayer?.color)
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(
@@ -61,18 +61,24 @@ fun GameScreen(
             )
             .safeDrawingPadding()
     ) {
+        val isCompact = maxHeight < 680.dp
+        val headerHeight = if (isCompact) 36.dp else 42.dp
+        val dockHeight = if (isCompact) 56.dp else 66.dp
+        val bannerHeight = if (isCompact) 28.dp else 34.dp
+        val contentPadding = if (isCompact) 4.dp else 8.dp
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = contentPadding, vertical = 2.dp),
             verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. TOP HEADER (Fixed Height: 40dp)
+            // 1. TOP HEADER
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(40.dp)
+                    .height(headerHeight)
                     .padding(horizontal = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -80,19 +86,19 @@ fun GameScreen(
                 IconButton(
                     onClick = onNavigateHome,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(if (isCompact) 32.dp else 36.dp)
                         .clip(CircleShape)
                         .background(Color.White)
                         .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                 ) {
-                    Text("🏠", fontSize = 16.sp)
+                    Text("🏠", fontSize = if (isCompact) 14.sp else 16.sp)
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("L", color = LudoRed, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Text("U", color = LudoGreen, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Text("D", color = LudoYellow, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                    Text("O", color = LudoBlue, fontSize = 22.sp, fontWeight = FontWeight.Black)
+                    Text("L", color = LudoRed, fontSize = if (isCompact) 20.sp else 22.sp, fontWeight = FontWeight.Black)
+                    Text("U", color = LudoGreen, fontSize = if (isCompact) 20.sp else 22.sp, fontWeight = FontWeight.Black)
+                    Text("D", color = LudoYellow, fontSize = if (isCompact) 20.sp else 22.sp, fontWeight = FontWeight.Black)
+                    Text("O", color = LudoBlue, fontSize = if (isCompact) 20.sp else 22.sp, fontWeight = FontWeight.Black)
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -102,43 +108,43 @@ fun GameScreen(
                             SoundEffectManager.isSoundEnabled = soundEnabled
                         },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(if (isCompact) 32.dp else 36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text(if (soundEnabled) "🔊" else "🔇", fontSize = 15.sp)
+                        Text(if (soundEnabled) "🔊" else "🔇", fontSize = if (isCompact) 13.sp else 15.sp)
                     }
 
                     IconButton(
                         onClick = { showRulesDialog = true },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(if (isCompact) 32.dp else 36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text("❓", fontSize = 15.sp)
+                        Text("❓", fontSize = if (isCompact) 13.sp else 15.sp)
                     }
 
                     IconButton(
                         onClick = { showRestartDialog = true },
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(if (isCompact) 32.dp else 36.dp)
                             .clip(CircleShape)
                             .background(Color.White)
                             .border(1.dp, Color(0xFFE0E0E0), CircleShape)
                     ) {
-                        Text("🔄", fontSize = 15.sp)
+                        Text("🔄", fontSize = if (isCompact) 13.sp else 15.sp)
                     }
                 }
             }
 
-            // 2. TOP CORNER DOCKS (Fixed Height: 66dp)
+            // 2. TOP CORNER DOCKS
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(66.dp),
+                    .height(dockHeight),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -158,7 +164,7 @@ fun GameScreen(
                         .fillMaxHeight()
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 CornerPlayerDock(
                     player = greenPlayer,
@@ -177,7 +183,7 @@ fun GameScreen(
                 )
             }
 
-            // 3. CENTER BOARD (Adaptive Aspect Ratio & Fixed Bounds)
+            // 3. CENTER BOARD (Adaptive Square Aspect Ratio)
             Box(
                 modifier = Modifier
                     .weight(1f, fill = false)
@@ -194,11 +200,11 @@ fun GameScreen(
                 )
             }
 
-            // 4. LIVE GUIDANCE BANNER (Fixed Height: 34dp)
+            // 4. LIVE GUIDANCE BANNER
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(34.dp)
+                    .height(bannerHeight)
                     .padding(horizontal = 4.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(Color.White)
@@ -208,7 +214,7 @@ fun GameScreen(
             ) {
                 Text(
                     text = gameState.moveMessage.ifEmpty { "${currentPlayer?.name ?: "Player"}'s turn" },
-                    fontSize = 12.sp,
+                    fontSize = if (isCompact) 11.sp else 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = currentPlayerColor,
                     textAlign = TextAlign.Center,
@@ -217,11 +223,11 @@ fun GameScreen(
                 )
             }
 
-            // 5. BOTTOM CORNER DOCKS (Fixed Height: 66dp)
+            // 5. BOTTOM CORNER DOCKS
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(66.dp),
+                    .height(dockHeight),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -241,7 +247,7 @@ fun GameScreen(
                         .fillMaxHeight()
                 )
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 CornerPlayerDock(
                     player = yellowPlayer,
@@ -260,6 +266,7 @@ fun GameScreen(
                 )
             }
         }
+
 
         // Win Dialog
         if (gameState.isGameOver) {
