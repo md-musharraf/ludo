@@ -6,14 +6,20 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -22,10 +28,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.example.ludo.audio.SoundEffectManager
+import com.example.ludo.core.settings.AppSettings
 import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.model.AiDifficulty
 import com.example.ludo.model.GamePhase
@@ -57,7 +62,7 @@ fun GameScreen(
     var showRulesDialog by remember { mutableStateOf(false) }
     var showRestartDialog by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
-    var soundEnabled by remember { mutableStateOf(SoundEffectManager.isSoundEnabled) }
+    var soundEnabled by remember { mutableStateOf(AppSettings.soundEnabled) }
 
     // Each cup keeps showing its owner's last roll instead of every cup mirroring the current one.
     val lastRolls = remember { mutableStateMapOf<Int, Int>() }
@@ -81,7 +86,7 @@ fun GameScreen(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(WarmBackgroundBrush)
+            .background(AppBackground)
             .safeDrawingPadding()
     ) {
         val isLandscape = maxWidth > maxHeight
@@ -95,8 +100,7 @@ fun GameScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = metrics.contentPadding, vertical = 2.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = metrics.contentPadding, vertical = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             GameHeader(
@@ -105,44 +109,53 @@ fun GameScreen(
                 onHome = requestLeave,
                 onToggleSound = {
                     soundEnabled = !soundEnabled
-                    SoundEffectManager.isSoundEnabled = soundEnabled
+                    AppSettings.soundEnabled = soundEnabled
                 },
                 onRules = { showRulesDialog = true },
                 onRestart = { showRestartDialog = true }
             )
 
-            if (isLandscape) {
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    DockColumn(metrics) {
-                        dock(PlayerColor.RED, it)
-                        dock(PlayerColor.BLUE, it)
+            // Play area: docks, board and status travel together as one centred group.
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(metrics.groupSpacing, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (isLandscape) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DockColumn(metrics) {
+                            dock(PlayerColor.RED, it)
+                            dock(PlayerColor.BLUE, it)
+                        }
+                        Board(gameState, viewModel::selectToken, Modifier.fillMaxHeight())
+                        DockColumn(metrics) {
+                            dock(PlayerColor.GREEN, it)
+                            dock(PlayerColor.YELLOW, it)
+                        }
                     }
-                    Board(gameState, viewModel::selectToken, Modifier.fillMaxHeight())
-                    DockColumn(metrics) {
+                } else {
+                    DockRow(metrics) {
+                        dock(PlayerColor.RED, it)
                         dock(PlayerColor.GREEN, it)
+                    }
+                    Board(gameState, viewModel::selectToken, Modifier.weight(1f, fill = false))
+                }
+
+                GuidanceBanner(gameState, metrics)
+
+                if (!isLandscape) {
+                    DockRow(metrics) {
+                        dock(PlayerColor.BLUE, it)
                         dock(PlayerColor.YELLOW, it)
                     }
-                }
-            } else {
-                DockRow(metrics) {
-                    dock(PlayerColor.RED, it)
-                    dock(PlayerColor.GREEN, it)
-                }
-                Board(gameState, viewModel::selectToken, Modifier.weight(1f, fill = false))
-            }
-
-            GuidanceBanner(gameState, metrics)
-
-            if (!isLandscape) {
-                DockRow(metrics) {
-                    dock(PlayerColor.BLUE, it)
-                    dock(PlayerColor.YELLOW, it)
                 }
             }
         }
@@ -185,15 +198,15 @@ fun GameScreen(
 }
 
 private class ScreenMetrics(isCompact: Boolean) {
-    val headerHeight: Dp = if (isCompact) 36.dp else 42.dp
-    val dockHeight: Dp = if (isCompact) 56.dp else 66.dp
-    val dockWidth: Dp = if (isCompact) 170.dp else 200.dp
-    val bannerHeight: Dp = if (isCompact) 28.dp else 34.dp
-    val contentPadding: Dp = if (isCompact) 4.dp else 8.dp
-    val iconButtonSize: Dp = if (isCompact) 32.dp else 36.dp
-    val iconFontSize: TextUnit = if (isCompact) 13.sp else 15.sp
-    val titleFontSize: TextUnit = if (isCompact) 20.sp else 22.sp
-    val bannerFontSize: TextUnit = if (isCompact) 11.sp else 12.sp
+    val headerHeight: Dp = if (isCompact) 44.dp else 52.dp
+    val dockHeight: Dp = if (isCompact) 58.dp else 66.dp
+    val dockWidth: Dp = if (isCompact) 190.dp else 230.dp
+    val bannerHeight: Dp = if (isCompact) 34.dp else 40.dp
+    val contentPadding: Dp = if (isCompact) 8.dp else 12.dp
+    val iconButtonSize: Dp = if (isCompact) 36.dp else 40.dp
+    val titleFontSize: TextUnit = if (isCompact) 22.sp else 26.sp
+    val bannerFontSize: TextUnit = if (isCompact) 12.sp else 13.sp
+    val groupSpacing: Dp = if (isCompact) 8.dp else 14.dp
 }
 
 @Composable
@@ -217,33 +230,22 @@ private fun GameHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(metrics.headerHeight)
-            .padding(horizontal = 4.dp),
+            .height(metrics.headerHeight),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        HeaderButton("🏠", "Home", metrics, onHome)
+        IconCircleButton(Icons.Rounded.Home, "Home", onHome, size = metrics.iconButtonSize)
         LudoTitle(fontSize = metrics.titleFontSize)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            HeaderButton(if (soundEnabled) "🔊" else "🔇", if (soundEnabled) "Mute" else "Unmute", metrics, onToggleSound)
-            HeaderButton("❓", "Rules", metrics, onRules)
-            HeaderButton("🔄", "Restart", metrics, onRestart)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            IconCircleButton(
+                if (soundEnabled) LudoIcons.VolumeOn else LudoIcons.VolumeOff,
+                if (soundEnabled) "Mute sound" else "Turn sound on",
+                onToggleSound,
+                size = metrics.iconButtonSize
+            )
+            IconCircleButton(Icons.Rounded.Info, "How to play", onRules, size = metrics.iconButtonSize)
+            IconCircleButton(Icons.Rounded.Refresh, "Restart match", onRestart, size = metrics.iconButtonSize)
         }
-    }
-}
-
-@Composable
-private fun HeaderButton(icon: String, label: String, metrics: ScreenMetrics, onClick: () -> Unit) {
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(metrics.iconButtonSize)
-            .clip(CircleShape)
-            .background(Color.White)
-            .border(1.dp, CardBorderWarm, CircleShape)
-            .semantics { contentDescription = label }
-    ) {
-        Text(icon, fontSize = metrics.iconFontSize)
     }
 }
 
@@ -264,7 +266,7 @@ private fun PlayerDock(
         canRoll = isCurrent && player?.isAI == false && state.gamePhase == GamePhase.WAITING_FOR_ROLL &&
             state.isDiceRollingForPlayer == null,
         isRolling = player != null && state.isDiceRollingForPlayer == player.id,
-        diceValue = player?.let { lastRolls[it.id] } ?: 1,
+        diceValue = (if (isCurrent) state.diceResult?.value else null) ?: player?.let { lastRolls[it.id] } ?: 1,
         diceSide = DockSides.getValue(color),
         onDiceClick = { if (isCurrent) onRoll() },
         modifier = modifier
@@ -301,8 +303,8 @@ private fun DockColumn(metrics: ScreenMetrics, content: @Composable (Modifier) -
 private fun Board(gameState: GameState, onTokenClick: (Int) -> Unit, modifier: Modifier) {
     Box(
         modifier = modifier
-            .aspectRatio(1f)
-            .padding(vertical = 2.dp),
+            .padding(2.dp)
+            .aspectRatio(1f),
         contentAlignment = Alignment.Center
     ) {
         LudoBoard(gameState = gameState, onTokenClick = onTokenClick, modifier = Modifier.fillMaxSize())
@@ -313,22 +315,31 @@ private fun Board(gameState: GameState, onTokenClick: (Int) -> Unit, modifier: M
 private fun GuidanceBanner(gameState: GameState, metrics: ScreenMetrics) {
     val currentPlayer = gameState.currentPlayer
     val color = PlayerColorUtils.getComposeColor(currentPlayer?.color)
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(metrics.bannerHeight)
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.White)
-            .border(1.5.dp, color.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center
+            .shadow(1.dp, CircleShape, ambientColor = InkDark, spotColor = InkDark)
+            .clip(CircleShape)
+            .background(SurfaceWhite)
+            .border(1.dp, HairlineBorder, CircleShape)
+            .padding(horizontal = 14.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
     ) {
+        Box(
+            Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.width(8.dp))
         Text(
             text = gameState.moveMessage.ifEmpty { "${currentPlayer?.name ?: "Player"}'s turn" },
             fontSize = metrics.bannerFontSize,
-            fontWeight = FontWeight.Bold,
-            color = color,
+            fontWeight = FontWeight.SemiBold,
+            color = InkDark,
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -336,52 +347,3 @@ private fun GuidanceBanner(gameState: GameState, metrics: ScreenMetrics) {
     }
 }
 
-private val Rules = listOf(
-    "🎲" to "Tap your corner Dice Cup to roll. Each player has their own cup.",
-    "🚪" to "Roll a 6 to move a piece out of your home base.",
-    "🔄" to "Rolling a 6 grants a bonus roll. Three 6s in a row forfeits the turn.",
-    "💥" to "Land on a lone opponent piece to capture it and earn a bonus roll.",
-    "🧱" to "Two pieces of one colour on a plain square form a block nobody can land on.",
-    "⭐" to "Star squares and coloured starting squares are Safe Zones.",
-    "🏠" to "Pieces must land exactly on Home. Reaching Home earns a bonus roll.",
-    "🥇" to "Get all 4 pieces Home first to win; others race on for 2nd and 3rd."
-)
-
-@Composable
-private fun RulesDialog(onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text("📜 Game Rules", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextDark)
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for ((icon, text) in Rules) {
-                        Row(verticalAlignment = Alignment.Top) {
-                            Text(icon, fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
-                            Text(text, fontSize = 13.sp, color = Color(0xFF616161), lineHeight = 18.sp)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(18.dp))
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = LudoGreen)
-                ) {
-                    Text("Got It!", color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-    }
-}

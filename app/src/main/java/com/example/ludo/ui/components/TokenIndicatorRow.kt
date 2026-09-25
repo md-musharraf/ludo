@@ -16,15 +16,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ludo.model.Token
 import com.example.ludo.model.TokenState
-import com.example.ludo.theme.SafeZoneStar
-
-private val InBaseGrey = Color(0xFFCFD8DC)
+import com.example.ludo.theme.HairlineBorder
 
 /**
  * One status dot per token:
  * - FINISHED: filled with the player colour.
- * - ON_BOARD / IN_HOME_COLUMN: white with a thick player-colour ring.
- * - IN_HOME: muted grey.
+ * - ON_BOARD / IN_HOME_COLUMN: ring in the player colour.
+ * - IN_HOME: neutral grey.
  */
 @Composable
 fun TokenIndicatorRow(
@@ -41,9 +39,9 @@ fun TokenIndicatorRow(
     ) {
         for (token in tokens) {
             val (fill, ring, ringWidth) = when (token.state) {
-                TokenState.FINISHED -> Triple(playerColor, SafeZoneStar, 1.dp)
-                TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> Triple(Color.White, playerColor, 1.6.dp)
-                TokenState.IN_HOME -> Triple(InBaseGrey, InBaseGrey, 0.dp)
+                TokenState.FINISHED -> Triple(playerColor, playerColor, 0.dp)
+                TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> Triple(Color.White, playerColor, 1.8.dp)
+                TokenState.IN_HOME -> Triple(HairlineBorder, HairlineBorder, 0.dp)
             }
             Box(
                 modifier = Modifier

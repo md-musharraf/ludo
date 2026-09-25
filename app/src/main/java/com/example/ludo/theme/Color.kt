@@ -1,29 +1,33 @@
 package com.example.ludo.theme
 
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
-// Classic Ludo vibrant colors matching reference
-val LudoRed = Color(0xFFE52521)
-val LudoGreen = Color(0xFF009E3D)
-val LudoYellow = Color(0xFFE5A800)
-val LudoBlue = Color(0xFF00A3FF)
+// Traditional Ludo colours, tuned slightly for screens.
+val LudoRed = Color(0xFFE23B3B)
+val LudoGreen = Color(0xFF1FA35B)
+val LudoYellow = Color(0xFFF2B200)
+val LudoBlue = Color(0xFF2B7FE0)
 
-val LudoRedLight = Color(0xFFFFCDD2)
-val LudoGreenLight = Color(0xFFC8E6C9)
-val LudoYellowLight = Color(0xFFFFF9C4)
-val LudoBlueLight = Color(0xFFBBDEFB)
+// Soft tints for bases, selected states and badges.
+val LudoRedLight = Color(0xFFFDE4E2)
+val LudoGreenLight = Color(0xFFDDF3E6)
+val LudoYellowLight = Color(0xFFFFF2C7)
+val LudoBlueLight = Color(0xFFDDEBFB)
 
+// Neutrals shared by every screen, the board, dice and cards.
+val AppBackground = Color(0xFFF6F2EA) // Warm ivory, like a board-game box insert
+val SurfaceWhite = Color(0xFFFFFFFF)
+val HairlineBorder = Color(0xFFE7E0D3)
+val BoardLine = Color(0xFFDCD4C6)
+val InkDark = Color(0xFF2A2320)
+val InkMuted = Color(0xFF7B716A)
+val InkFaint = Color(0xFFB9AFA3)
+val SubtleFill = Color(0xFFF1ECE3)
+
+// Kept for existing references.
 val SafeZoneStar = Color(0xFFFFFFFF)
-
-// Common UI support
-val CardWarm = Color(0xFFFFFFFF)
-val CardBorderWarm = Color(0xFFE0E0E0)
-val TextDark = Color(0xFF3E2723)
-val TextMuted = Color(0xFF757575)
-val TextBrown = Color(0xFF6D4C41)
-
-/** Warm parchment backdrop shared by every screen. */
-val WarmBackgroundBrush = Brush.verticalGradient(
-    listOf(Color(0xFFFFF8E1), Color(0xFFFFECB3), Color(0xFFFFE082))
-)
+val CardWarm = SurfaceWhite
+val CardBorderWarm = HairlineBorder
+val TextDark = InkDark
+val TextMuted = InkMuted
+val TextBrown = InkMuted

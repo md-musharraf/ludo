@@ -1,256 +1,167 @@
 package com.example.ludo.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ludo.audio.SoundEffectManager
+import com.example.ludo.core.settings.AppSettings
 import com.example.ludo.model.AiDifficulty
 import com.example.ludo.theme.*
-import com.example.ludo.ui.components.LudoTitle
+import com.example.ludo.ui.components.*
+
+private enum class Opponents(val label: String) { COMPUTER("Computer"), LOCAL("Pass & Play") }
 
 @Composable
 fun HomeScreen(onStartGame: (Int, Boolean, AiDifficulty) -> Unit) {
     // Saveable so choices survive rotation and returning from a match.
     var playerCount by rememberSaveable { mutableIntStateOf(4) }
-    var isVsAI by rememberSaveable { mutableStateOf(true) }
+    var opponents by rememberSaveable { mutableStateOf(Opponents.COMPUTER) }
     var aiDifficulty by rememberSaveable { mutableStateOf(AiDifficulty.HARD) }
+    var showRules by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(false) }
+    var soundEnabled by remember { mutableStateOf(AppSettings.soundEnabled) }
+
+    val tap = { SoundEffectManager.playButtonTap() }
+    val start = {
+        tap()
+        onStartGame(playerCount, opponents == Opponents.COMPUTER, aiDifficulty)
+    }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(WarmBackgroundBrush)
+            .background(AppBackground)
             .safeDrawingPadding(),
-        contentAlignment = Alignment.TopCenter
+        contentAlignment = Alignment.Center
     ) {
-        val isCompact = maxHeight < 680.dp
-        val horizontalPadding = if (isCompact) 16.dp else 24.dp
-        val titleSize = if (isCompact) 44.sp else 54.sp
-        val titleSpacer = if (isCompact) 18.dp else 32.dp
+        val wide = maxWidth >= 720.dp
+        val compact = maxHeight < 640.dp
 
-        // Scrolls on short (landscape) screens, stays centred on tall ones, capped width on tablets.
-        Column(
-            modifier = Modifier
-                .widthIn(max = 520.dp)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .heightIn(min = maxHeight)
-                .padding(horizontal = horizontalPadding, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            LudoTitle(fontSize = titleSize)
+        val brand = @Composable { modifier: Modifier ->
+            Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+                LogoMark(size = if (compact) 64.dp else 84.dp)
+                Spacer(Modifier.height(if (compact) 12.dp else 18.dp))
+                LudoTitle(fontSize = if (compact) 40.sp else 52.sp)
+                Text("The classic board game", fontSize = 14.sp, color = InkMuted, fontWeight = FontWeight.Medium)
+            }
+        }
 
-            Spacer(modifier = Modifier.height(2.dp))
+        val setup = @Composable { modifier: Modifier ->
+            Column(modifier) {
+                LudoCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(20.dp)) {
+                        Text("New Game", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = InkDark)
+                        Spacer(Modifier.height(16.dp))
 
-            Text(
-                text = "SUPER LUDO MASTER",
-                fontSize = if (isCompact) 11.sp else 13.sp,
-                color = TextBrown,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = if (isCompact) 3.sp else 4.sp
-            )
+                        SectionLabel("Players")
+                        Spacer(Modifier.height(8.dp))
+                        SegmentedControl(
+                            options = listOf(2, 3, 4),
+                            selected = playerCount,
+                            label = { "$it" },
+                            onSelect = { tap(); playerCount = it }
+                        )
 
-            Spacer(modifier = Modifier.height(titleSpacer))
+                        Spacer(Modifier.height(16.dp))
+                        SectionLabel("Opponents")
+                        Spacer(Modifier.height(8.dp))
+                        SegmentedControl(
+                            options = Opponents.entries,
+                            selected = opponents,
+                            label = { it.label },
+                            onSelect = { tap(); opponents = it }
+                        )
 
-            // Settings card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(if (isCompact) 14.dp else 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Number of Players",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = if (isCompact) 14.sp else 16.sp,
-                        color = TextDark
-                    )
-
-                    Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 14.dp)
-                    ) {
-                        listOf(2, 3, 4).forEach { count ->
-                            val isSelected = playerCount == count
-                            val circleSize = if (isCompact) 48.dp else 56.dp
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier
-                                    .size(circleSize)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) LudoGreen.copy(alpha = 0.15f) else Color(0xFFF5F5F5)
-                                    )
-                                    .border(
-                                        width = 2.dp,
-                                        color = if (isSelected) LudoGreen else Color(0xFFE0E0E0),
-                                        shape = CircleShape
-                                    )
-                                    .selectable(selected = isSelected, role = Role.RadioButton) {
-                                        SoundEffectManager.playButtonTap()
-                                        playerCount = count
-                                    }
-                            ) {
-                                Text(
-                                    text = "$count",
-                                    fontSize = if (isCompact) 18.sp else 20.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) LudoGreen else Color(0xFF757575)
+                        AnimatedVisibility(
+                            visible = opponents == Opponents.COMPUTER,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            Column {
+                                Spacer(Modifier.height(16.dp))
+                                SectionLabel("Difficulty")
+                                Spacer(Modifier.height(8.dp))
+                                SegmentedControl(
+                                    options = AiDifficulty.entries,
+                                    selected = aiDifficulty,
+                                    label = { if (it == AiDifficulty.EASY) "Easy" else "Hard" },
+                                    onSelect = { tap(); aiDifficulty = it },
+                                    accent = if (aiDifficulty == AiDifficulty.EASY) LudoGreen else LudoRed
                                 )
                             }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(if (isCompact) 14.dp else 22.dp))
-
-                    Text(
-                        text = "Game Mode",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = if (isCompact) 14.sp else 16.sp,
-                        color = TextDark
-                    )
-
-                    Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        ModeButton(
-                            text = "🤖 vs AI",
-                            isSelected = isVsAI,
-                            color = LudoBlue,
-                            onClick = { isVsAI = true },
-                            modifier = Modifier.weight(1f)
-                        )
-                        ModeButton(
-                            text = "👥 Local",
-                            isSelected = !isVsAI,
-                            color = LudoGreen,
-                            onClick = { isVsAI = false },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    if (isVsAI) {
-                        Spacer(modifier = Modifier.height(if (isCompact) 12.dp else 18.dp))
-
-                        Text(
-                            text = "AI Difficulty",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = if (isCompact) 14.sp else 16.sp,
-                            color = TextDark
-                        )
-
-                        Spacer(modifier = Modifier.height(if (isCompact) 8.dp else 12.dp))
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            ModeButton(
-                                text = "😊 Easy",
-                                isSelected = aiDifficulty == AiDifficulty.EASY,
-                                color = LudoGreen,
-                                onClick = { aiDifficulty = AiDifficulty.EASY },
-                                modifier = Modifier.weight(1f)
-                            )
-                            ModeButton(
-                                text = "😈 Hard",
-                                isSelected = aiDifficulty == AiDifficulty.HARD,
-                                color = LudoRed,
-                                onClick = { aiDifficulty = AiDifficulty.HARD },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton("Play", onClick = start, icon = Icons.Rounded.PlayArrow, height = if (compact) 52.dp else 58.dp)
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SecondaryButton("Rules", onClick = { tap(); showRules = true }, icon = Icons.Rounded.Info, modifier = Modifier.weight(1f))
+                    SecondaryButton("Settings", onClick = { tap(); showSettings = true }, icon = Icons.Rounded.Settings, modifier = Modifier.weight(1f))
                 }
             }
+        }
 
-            Spacer(modifier = Modifier.height(if (isCompact) 18.dp else 28.dp))
-
-            // Start button
-            Button(
-                onClick = {
-                    SoundEffectManager.playButtonTap()
-                    onStartGame(playerCount, isVsAI, aiDifficulty)
-                },
+        if (wide) {
+            Row(
                 modifier = Modifier
+                    .widthIn(max = 960.dp)
                     .fillMaxWidth()
-                    .height(if (isCompact) 50.dp else 58.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = LudoGreen
-                ),
-                elevation = ButtonDefaults.buttonElevation(
-                    defaultElevation = 6.dp,
-                    pressedElevation = 2.dp
-                )
+                    .verticalScroll(rememberScrollState())
+                    .padding(32.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(48.dp)
             ) {
-                Text(
-                    text = "🎲  START GAME",
-                    fontSize = if (isCompact) 18.sp else 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                brand(Modifier.weight(1f))
+                setup(Modifier.weight(1f).widthIn(max = 460.dp))
+            }
+        } else {
+            // Scrolls on short screens, stays centred on tall ones, capped width on tablets.
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 480.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight)
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                brand(Modifier)
+                Spacer(Modifier.height(if (compact) 20.dp else 32.dp))
+                setup(Modifier.fillMaxWidth())
             }
         }
     }
 
-}
-
-@Composable
-private fun ModeButton(
-    text: String,
-    isSelected: Boolean,
-    color: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .height(48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) color.copy(alpha = 0.15f) else Color(0xFFF5F5F5))
-            .border(
-                width = if (isSelected) 2.dp else 1.dp,
-                color = if (isSelected) color else Color(0xFFE0E0E0),
-                shape = RoundedCornerShape(12.dp)
-            )
-            .selectable(selected = isSelected, role = Role.RadioButton) {
-                SoundEffectManager.playButtonTap()
-                onClick()
-            }
-    ) {
-        Text(
-            text = text,
-            fontSize = 14.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = if (isSelected) color else Color(0xFF757575),
-            textAlign = TextAlign.Center
+    if (showRules) RulesDialog(onDismiss = { showRules = false })
+    if (showSettings) {
+        SettingsDialog(
+            soundEnabled = soundEnabled,
+            onSoundChange = {
+                soundEnabled = it
+                AppSettings.soundEnabled = it
+            },
+            onDismiss = { showSettings = false }
         )
     }
 }

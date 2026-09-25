@@ -14,6 +14,16 @@ data class HopMove(
     val seq: Long
 )
 
+/** A one-shot celebration the board plays (a capture burst or a piece reaching home). */
+data class BoardEffect(
+    val kind: Kind,
+    val color: PlayerColor,
+    val cell: Pair<Int, Int>,
+    val seq: Long
+) {
+    enum class Kind { CAPTURE, FINISH }
+}
+
 data class GameState(
     val players: List<Player> = emptyList(),
     val currentPlayerIndex: Int = 0,
@@ -25,7 +35,8 @@ data class GameState(
     val winnerId: Int? = null,
     val moveMessage: String = "",
     val isDiceRollingForPlayer: Int? = null,
-    val hop: HopMove? = null
+    val hop: HopMove? = null,
+    val effect: BoardEffect? = null
 ) {
     val currentPlayer: Player? get() = players.getOrNull(currentPlayerIndex)
 

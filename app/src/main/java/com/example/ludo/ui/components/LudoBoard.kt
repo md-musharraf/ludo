@@ -1,18 +1,23 @@
 package com.example.ludo.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -20,21 +25,25 @@ import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.dp
 import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.engine.BoardConfig
 import com.example.ludo.model.*
+import com.example.ludo.theme.*
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
 
+private val BoardShape = RoundedCornerShape(14.dp)
+
 /**
- * Classic 3D Ludo board, rendered as two layers:
+ * Classic Ludo board, rendered as two layers:
  * 1. [BoardBackdrop]: the static board in its own graphics layer. It reads no state, so it is
  *    recorded once per size and replayed from the RenderNode afterwards.
- * 2. Pawn layer: the turn halo, pawns and hop animation. Hop progress and pulse are read only in
- *    the draw phase, so animating redraws this layer without recomposition.
+ * 2. Pawn layer: turn marker, pawns, hops and capture/finish bursts. Animated values are read
+ *    only in the draw phase, so animating redraws this layer without recomposition.
  */
 @Composable
 fun LudoBoard(
@@ -44,7 +53,7 @@ fun LudoBoard(
 ) {
     val currentPlayer = gameState.currentPlayer
     val humanChoosing = gameState.gamePhase == GamePhase.WAITING_FOR_MOVE && currentPlayer?.isAI == false
-    val pulse by rememberPulse(active = humanChoosing, from = 0f, to = 1f, durationMs = 600, idle = 0.6f)
+    val pulse by rememberPulse(active = humanChoosing, from = 0f, to = 1f, durationMs = 520, idle = 0f)
 
     val spots = remember(gameState) { layoutPawns(gameState) }
 
@@ -55,10 +64,22 @@ fun LudoBoard(
         if (hop != null) hopProgress.animateTo(1f, tween(hop.durationMs, easing = LinearEasing))
     }
 
+    val effect = gameState.effect
+    val effectProgress = remember(effect?.seq) { Animatable(if (effect == null) 1f else 0f) }
+    LaunchedEffect(effect?.seq) {
+        if (effect != null) effectProgress.animateTo(1f, tween(EFFECT_MS, easing = FastOutSlowInEasing))
+    }
+
     val latestSpots by rememberUpdatedState(spots)
     val latestOnTokenClick by rememberUpdatedState(onTokenClick)
 
-    Box(modifier) {
+    Box(
+        modifier
+            .shadow(elevation = 6.dp, shape = BoardShape, ambientColor = InkDark, spotColor = InkDark)
+            .clip(BoardShape)
+            .background(SurfaceWhite)
+            .border(1.dp, HairlineBorder, BoardShape)
+    ) {
         BoardBackdrop()
 
         Canvas(
@@ -79,30 +100,25 @@ fun LudoBoard(
                 }
         ) {
             val g = BoardGeometry(size)
-            val pulseAlpha = 0.35f + 0.6f * pulse
-            val pulseScale = 1f + 0.18f * pulse
-
-            currentPlayer?.let { drawTurnHalo(g, it.color, pulseAlpha) }
+            currentPlayer?.let { drawTurnMarker(g, it.color) }
 
             for (spot in spots) {
-                val center = g.point(spot.cx, spot.cy)
-                draw3DClassicPawn(
-                    center = center,
+                drawPawn(
+                    center = g.point(spot.cx, spot.cy),
                     radius = spot.radius * g.cell,
-                    playerColor = spot.color,
-                    isValid = spot.isValid,
-                    pulseAlpha = pulseAlpha,
-                    pulseScale = pulseScale,
-                    groundCenter = center,
-                    hopHeight = 0f,
-                    isAnimating = false
+                    color = spot.color,
+                    lift = if (spot.isValid) pulse * g.cell * 0.12f else 0f,
+                    selectable = if (spot.isValid) 0.4f + 0.6f * pulse else 0f
                 )
             }
 
             if (hop != null) {
-                val color = gameState.players.firstOrNull { it.id == hop.playerId }?.color ?: return@Canvas
-                drawHoppingPawn(g, hop, color, hopProgress.value)
+                gameState.players.firstOrNull { it.id == hop.playerId }?.color?.let {
+                    drawHoppingPawn(g, hop, it, hopProgress.value)
+                }
             }
+
+            if (effect != null && effectProgress.value < 1f) drawEffect(g, effect, effectProgress.value)
         }
     }
 }
@@ -112,23 +128,18 @@ fun LudoBoard(
 private fun BoardBackdrop() {
     Canvas(Modifier.fillMaxSize().graphicsLayer()) {
         val g = BoardGeometry(size)
-        drawBoardBase(g)
         for (color in PlayerColor.entries) drawHomeBase(g, color)
-        drawTrackCells(g)
-        drawStartingSquares(g)
-        drawSafeZones(g)
-        for (color in PlayerColor.entries) {
-            drawHomeColumn(g, BoardConfig.homeColumns[color.ordinal], PlayerColorUtils.getComposeColor(color))
-        }
+        drawTrack(g)
+        drawSafeSquares(g)
         drawTrackArrows(g)
         drawCenterHome(g)
-        drawGoldenBoardFrame(g)
     }
 }
 
 // region Layout
 
 private const val TAP_RADIUS_CELLS = 1.1f
+private const val EFFECT_MS = 700
 
 /** Square board fitted and centred in the canvas; board coordinates are in cell units. */
 private class BoardGeometry(size: Size) {
@@ -140,6 +151,7 @@ private class BoardGeometry(size: Size) {
     fun x(col: Float) = offsetX + col * cell
     fun y(row: Float) = offsetY + row * cell
     fun point(col: Float, row: Float) = Offset(x(col), y(row))
+    fun cellCenter(cell: Pair<Int, Int>) = point(cell.second + 0.5f, cell.first + 0.5f)
 }
 
 /** A pawn resting on the board. [cx]/[cy]/[radius] are in cell units (cell centre = index + 0.5). */
@@ -209,11 +221,11 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
 /** Offset (cell units) and radius for the [index]-th of [count] pawns sharing a cell. */
 private fun stackOffset(count: Int, index: Int): Triple<Float, Float, Float> = when (count) {
     1 -> Triple(0f, 0f, 0.44f)
-    2 -> if (index == 0) Triple(-0.16f, -0.16f, 0.32f) else Triple(0.16f, 0.16f, 0.32f)
+    2 -> if (index == 0) Triple(-0.16f, -0.12f, 0.32f) else Triple(0.16f, 0.12f, 0.32f)
     3 -> when (index) {
         0 -> Triple(0f, -0.16f, 0.28f)
-        1 -> Triple(-0.16f, 0.144f, 0.28f)
-        else -> Triple(0.16f, 0.144f, 0.28f)
+        1 -> Triple(-0.18f, 0.14f, 0.28f)
+        else -> Triple(0.18f, 0.14f, 0.28f)
     }
     else -> when (index % 4) {
         0 -> Triple(-0.18f, -0.18f, 0.24f)
@@ -238,34 +250,53 @@ private fun DrawScope.drawHoppingPawn(g: BoardGeometry, hop: HopMove, color: Pla
     // Longer journeys (e.g. a captured pawn flying home) arc higher.
     val distance = hypot(toCol - fromCol, toRow - fromRow)
     val arc = sin(progress * PI.toFloat())
-    val hopHeight = arc * g.cell * (0.8f + 0.12f * distance).coerceAtMost(2.2f)
+    val lift = arc * g.cell * (0.55f + 0.12f * distance).coerceAtMost(2f)
 
-    draw3DClassicPawn(
-        center = Offset(ground.x, ground.y - hopHeight),
-        radius = g.cell * 0.44f * (1f + arc * 0.2f),
-        playerColor = color,
-        isValid = false,
-        pulseAlpha = 0f,
-        pulseScale = 1f,
-        groundCenter = ground,
-        hopHeight = hopHeight,
-        isAnimating = true
-    )
+    drawPawn(center = ground, radius = g.cell * 0.44f * (1f + arc * 0.12f), color = color, lift = lift)
 }
 
 /** Top-left cell (row, col) of each colour's 6x6 base, by colour ordinal. */
 private val BaseOrigins = arrayOf(0 to 0, 0 to 9, 9 to 9, 9 to 0)
 
-private fun DrawScope.drawTurnHalo(g: BoardGeometry, color: PlayerColor, pulseAlpha: Float) {
+/** White ring inside the active player's base frame. */
+private fun DrawScope.drawTurnMarker(g: BoardGeometry, color: PlayerColor) {
     val (row, col) = BaseOrigins[color.ordinal]
-    val homeSize = g.cell * 6
+    val inset = g.cell * 0.36f
+    val stroke = g.cell * 0.1f
     drawRoundRect(
-        color = PlayerColorUtils.getComposeColor(color).copy(alpha = pulseAlpha * 0.65f),
-        topLeft = Offset(g.x(col.toFloat()) - 3f, g.y(row.toFloat()) - 3f),
-        size = Size(homeSize + 6f, homeSize + 6f),
-        cornerRadius = CornerRadius(g.cell * 0.45f),
-        style = Stroke(width = 3.5f)
+        color = Color.White.copy(alpha = 0.9f),
+        topLeft = Offset(g.x(col.toFloat()) + inset, g.y(row.toFloat()) + inset),
+        size = Size(g.cell * 6 - inset * 2, g.cell * 6 - inset * 2),
+        cornerRadius = CornerRadius(g.cell * 0.55f),
+        style = Stroke(width = stroke)
     )
+}
+
+/** Expanding ring plus radiating sparks; gold sparks mark a piece reaching home. */
+private fun DrawScope.drawEffect(g: BoardGeometry, effect: BoardEffect, p: Float) {
+    val color = PlayerColorUtils.getComposeColor(effect.color)
+    val isFinish = effect.kind == BoardEffect.Kind.FINISH
+    val center = if (isFinish) {
+        val (ax, ay, _) = GoalAnchors[effect.color.ordinal]
+        g.point(ax, ay)
+    } else {
+        g.cellCenter(effect.cell)
+    }
+    val fade = 1f - p
+    val reach = g.cell * (if (isFinish) 1.7f else 1.3f) * p
+
+    if (!isFinish) drawCircle(Color.White.copy(alpha = 0.7f * fade), g.cell * 0.55f * (1f - 0.4f * p), center)
+    drawCircle(color.copy(alpha = 0.85f * fade), reach, center, style = Stroke(g.cell * 0.14f * fade + 1f))
+
+    val sparkColor = if (isFinish) Color(0xFFF7C948) else color
+    for (i in 0 until 8) {
+        val angle = i * (PI.toFloat() / 4f) + if (isFinish) p * 0.6f else 0f
+        drawCircle(
+            color = sparkColor.copy(alpha = fade),
+            radius = g.cell * 0.08f * (0.4f + fade),
+            center = Offset(center.x + cos(angle) * reach * 1.1f, center.y + sin(angle) * reach * 1.1f)
+        )
+    }
 }
 
 // endregion
@@ -277,123 +308,55 @@ private val sharedArrowPath = Path()
 private val sharedStarPath = Path()
 private val sharedTrianglePath = Path()
 
-private fun DrawScope.drawBoardBase(g: BoardGeometry) {
-    drawRoundRect(
-        color = Color(0x35000000),
-        topLeft = Offset(g.offsetX + 3f, g.offsetY + 6f),
-        size = Size(g.boardSize, g.boardSize),
-        cornerRadius = CornerRadius(g.cell * 0.50f)
-    )
-    drawRoundRect(
-        color = Color.White,
-        topLeft = Offset(g.offsetX, g.offsetY),
-        size = Size(g.boardSize, g.boardSize),
-        cornerRadius = CornerRadius(g.cell * 0.50f)
-    )
-}
-
 private fun DrawScope.drawHomeBase(g: BoardGeometry, player: PlayerColor) {
     val color = PlayerColorUtils.getComposeColor(player)
+    val light = PlayerColorUtils.getLightColor(player)
     val (row, col) = BaseOrigins[player.ordinal]
-    val cellSize = g.cell
     val x = g.x(col.toFloat())
     val y = g.y(row.toFloat())
-    val homeSize = cellSize * 6
+    val homeSize = g.cell * 6
 
-    // Outer Colored Rounded Frame
+    drawRect(color = color, topLeft = Offset(x, y), size = Size(homeSize, homeSize))
+
+    // White yard with a hairline edge.
+    val inset = g.cell * 0.75f
+    val yardSize = homeSize - inset * 2
     drawRoundRect(
-        color = color,
-        topLeft = Offset(x, y),
-        size = Size(homeSize, homeSize),
-        cornerRadius = CornerRadius(cellSize * 0.45f)
+        color = Color.White,
+        topLeft = Offset(x + inset, y + inset),
+        size = Size(yardSize, yardSize),
+        cornerRadius = CornerRadius(g.cell * 0.45f)
     )
 
-    // Inner Tinted Platform
-    val innerMargin = cellSize * 0.85f
-    val innerSize = homeSize - innerMargin * 2
-    drawRoundRect(
-        color = PlayerColorUtils.getLightColor(player),
-        topLeft = Offset(x + innerMargin, y + innerMargin),
-        size = Size(innerSize, innerSize),
-        cornerRadius = CornerRadius(cellSize * 0.38f)
-    )
-    drawRoundRect(
-        color = color.copy(alpha = 0.25f),
-        topLeft = Offset(x + innerMargin, y + innerMargin),
-        size = Size(innerSize, innerSize),
-        cornerRadius = CornerRadius(cellSize * 0.38f),
-        style = Stroke(width = 1.8f)
-    )
-
-    // 4 Sunken 3D Socket Saucers
-    val spotRadius = cellSize * 0.52f
-    for ((spotRow, spotCol) in BoardConfig.homePositions.getValue(player.ordinal)) {
-        val center = g.point(spotCol + 0.5f, spotRow + 0.5f)
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(Color.Transparent, Color(0x35000000), Color(0x60000000)),
-                center = Offset(center.x - spotRadius * 0.2f, center.y - spotRadius * 0.2f),
-                radius = spotRadius
-            ),
-            radius = spotRadius,
-            center = center
-        )
-        drawCircle(color = color.copy(alpha = 0.85f), radius = spotRadius, center = center, style = Stroke(width = 3.2f))
-        drawCircle(color = color.copy(alpha = 0.18f), radius = spotRadius * 0.82f, center = center)
-        drawArc(
-            color = Color.White.copy(alpha = 0.65f),
-            startAngle = 45f,
-            sweepAngle = 90f,
-            useCenter = false,
-            topLeft = Offset(center.x - spotRadius, center.y - spotRadius),
-            size = Size(spotRadius * 2, spotRadius * 2),
-            style = Stroke(width = 1.6f)
-        )
+    // Four ringed spots where pieces wait.
+    val spotRadius = g.cell * 0.6f
+    for (spot in BoardConfig.homePositions.getValue(player.ordinal)) {
+        val center = g.cellCenter(spot)
+        drawCircle(light, spotRadius, center)
+        drawCircle(color, spotRadius, center, style = Stroke(g.cell * 0.07f))
     }
 }
 
-private fun DrawScope.drawGoldenBoardFrame(g: BoardGeometry) {
-    drawRoundRect(
-        brush = Brush.linearGradient(
-            colors = listOf(Color(0xFF8D6E14), Color(0xFFF9D976), Color(0xFFD4AF37), Color(0xFF8D6E14)),
-            start = Offset(g.offsetX, g.offsetY),
-            end = Offset(g.offsetX + g.boardSize, g.offsetY + g.boardSize)
-        ),
-        topLeft = Offset(g.offsetX - 2f, g.offsetY - 2f),
-        size = Size(g.boardSize + 4f, g.boardSize + 4f),
-        cornerRadius = CornerRadius(g.cell * 0.50f),
-        style = Stroke(width = 4.0f)
-    )
-    drawRoundRect(
-        color = Color(0xFF5D4037),
-        topLeft = Offset(g.offsetX, g.offsetY),
-        size = Size(g.boardSize, g.boardSize),
-        cornerRadius = CornerRadius(g.cell * 0.50f),
-        style = Stroke(width = 1.5f)
-    )
-}
-
-/** Fills a cell and outlines it; shared by track, start squares and home columns. */
-private fun DrawScope.drawCell(g: BoardGeometry, cell: Pair<Int, Int>, fill: Color, stroke: Color, strokeWidth: Float) {
-    val topLeft = g.point(cell.second.toFloat(), cell.first.toFloat())
-    val size = Size(g.cell, g.cell)
-    drawRect(color = fill, topLeft = topLeft, size = size)
-    drawRect(color = stroke, topLeft = topLeft, size = size, style = Stroke(width = strokeWidth))
-}
-
-private fun DrawScope.drawTrackCells(g: BoardGeometry) {
-    for (cell in BoardConfig.mainTrack) drawCell(g, cell, Color.White, Color(0xFFCFD8DC), 1f)
-}
-
-private fun DrawScope.drawStartingSquares(g: BoardGeometry) {
+private fun DrawScope.drawTrack(g: BoardGeometry) {
+    val cellSize = Size(g.cell, g.cell)
+    val colored = HashMap<Pair<Int, Int>, Color>()
     for (color in PlayerColor.entries) {
-        val cell = BoardConfig.mainTrack[BoardConfig.startIndices[color.ordinal]]
-        drawCell(g, cell, PlayerColorUtils.getComposeColor(color), Color(0xFFB0BEC5), 1.2f)
+        val c = PlayerColorUtils.getComposeColor(color)
+        colored[BoardConfig.mainTrack[BoardConfig.startIndices[color.ordinal]]] = c
+        for (cell in BoardConfig.homeColumns[color.ordinal].dropLast(1)) colored[cell] = c // Last cell sits in the centre
     }
-}
-
-private fun DrawScope.drawHomeColumn(g: BoardGeometry, positions: List<Pair<Int, Int>>, color: Color) {
-    for (cell in positions) drawCell(g, cell, color, Color.White.copy(alpha = 0.5f), 1f)
+    val cells = BoardConfig.mainTrack + BoardConfig.homeColumns.flatMap { it.dropLast(1) }
+    for (cell in cells) {
+        val topLeft = g.point(cell.second.toFloat(), cell.first.toFloat())
+        val fill = colored[cell]
+        if (fill != null) drawRect(fill, topLeft, cellSize)
+        drawRect(
+            color = if (fill != null) Color.White.copy(alpha = 0.35f) else BoardLine,
+            topLeft = topLeft,
+            size = cellSize,
+            style = Stroke(width = 1.dp.toPx())
+        )
+    }
 }
 
 // Entry arrows pointing into each home column: (col, row, angle) by colour ordinal.
@@ -402,7 +365,7 @@ private val ArrowSpecs = arrayOf(Triple(0, 7, 0f), Triple(7, 0, 90f), Triple(14,
 private fun DrawScope.drawTrackArrows(g: BoardGeometry) {
     for (color in PlayerColor.entries) {
         val (col, row, angle) = ArrowSpecs[color.ordinal]
-        drawDirectionArrow(g.point(col + 0.5f, row + 0.5f), g.cell * 0.45f, PlayerColorUtils.getComposeColor(color), angle)
+        drawDirectionArrow(g.point(col + 0.5f, row + 0.5f), g.cell * 0.46f, PlayerColorUtils.getComposeColor(color), angle)
     }
 }
 
@@ -416,7 +379,7 @@ private fun DrawScope.drawDirectionArrow(center: Offset, size: Float, color: Col
 
     val tip = rotated(half, 0f)
     val top = rotated(-half, -half * 0.7f)
-    val mid = rotated(-half * 0.4f, 0f)
+    val mid = rotated(-half * 0.35f, 0f)
     val bottom = rotated(-half, half * 0.7f)
 
     sharedArrowPath.reset()
@@ -428,18 +391,21 @@ private fun DrawScope.drawDirectionArrow(center: Offset, size: Float, color: Col
     drawPath(sharedArrowPath, color = color, style = Fill)
 }
 
-private fun DrawScope.drawSafeZones(g: BoardGeometry) {
+/** Grey outlined stars on the neutral safe squares, white stars on the coloured start squares. */
+private fun DrawScope.drawSafeSquares(g: BoardGeometry) {
     for (index in BoardConfig.starSpotIndices) {
-        val (row, col) = BoardConfig.mainTrack[index]
-        drawStar(g.point(col + 0.5f, row + 0.5f), g.cell * 0.36f, Color(0xFFFFD54F), Color(0xFF8D6E14))
+        drawStar(g.cellCenter(BoardConfig.mainTrack[index]), g.cell * 0.34f, SubtleFill, InkFaint)
+    }
+    for (start in BoardConfig.startIndices) {
+        drawStar(g.cellCenter(BoardConfig.mainTrack[start]), g.cell * 0.3f, Color.White.copy(alpha = 0.9f), null)
     }
 }
 
-private fun DrawScope.drawStar(center: Offset, radius: Float, fillColor: Color, strokeColor: Color) {
+private fun DrawScope.drawStar(center: Offset, radius: Float, fillColor: Color, strokeColor: Color?) {
     val points = 5
     sharedStarPath.reset()
     for (i in 0 until points * 2) {
-        val r = if (i % 2 == 0) radius else radius * 0.42f
+        val r = if (i % 2 == 0) radius else radius * 0.45f
         val angle = Math.toRadians((i * 360.0 / (points * 2)) - 90.0)
         val x = center.x + r * cos(angle).toFloat()
         val y = center.y + r * sin(angle).toFloat()
@@ -447,7 +413,7 @@ private fun DrawScope.drawStar(center: Offset, radius: Float, fillColor: Color, 
     }
     sharedStarPath.close()
     drawPath(sharedStarPath, color = fillColor, style = Fill)
-    drawPath(sharedStarPath, color = strokeColor, style = Stroke(width = 1.8f))
+    if (strokeColor != null) drawPath(sharedStarPath, color = strokeColor, style = Stroke(width = 1.2.dp.toPx()))
 }
 
 // Outer corners (col, row offsets from centre, in cells) of each colour's centre triangle.
@@ -460,6 +426,7 @@ private val TriangleCorners = arrayOf(
 
 private fun DrawScope.drawCenterHome(g: BoardGeometry) {
     val center = g.point(7.5f, 7.5f)
+    val seam = Stroke(width = 1.5.dp.toPx())
     for (color in PlayerColor.entries) {
         val c = TriangleCorners[color.ordinal]
         sharedTrianglePath.reset()
@@ -468,6 +435,7 @@ private fun DrawScope.drawCenterHome(g: BoardGeometry) {
         sharedTrianglePath.lineTo(center.x, center.y)
         sharedTrianglePath.close()
         drawPath(sharedTrianglePath, color = PlayerColorUtils.getComposeColor(color), style = Fill)
+        drawPath(sharedTrianglePath, color = Color.White.copy(alpha = 0.6f), style = seam)
     }
 }
 

@@ -35,6 +35,7 @@ class GameEngine(
     private var aiPlayer: AIPlayer? = null
     private var gameJob: Job = SupervisorJob()
     private var hopSeq = 0L
+    private var effectSeq = 0L
 
     fun resetGame(playerCount: Int, isVsAI: Boolean, aiDifficulty: AiDifficulty = AiDifficulty.HARD) {
         gameJob.cancel()
@@ -241,6 +242,7 @@ class GameEngine(
             bonusTurn = true
             note = " 🎉 A piece reached HOME!"
             SoundEffectManager.playSixRolled()
+            emitEffect(BoardEffect.Kind.FINISH, _state.value.players[playerIndex].color, token.boardPosition)
         }
 
         val cell = token.boardPosition
@@ -276,6 +278,7 @@ class GameEngine(
         if (victims.isEmpty()) return false
 
         SoundEffectManager.playCapture()
+        emitEffect(BoardEffect.Kind.CAPTURE, capturer.color, cell)
         for ((victimIndex, victim) in victims) {
             val owner = _state.value.players[victimIndex]
             AppLogger.i(TAG) { "${capturer.name} captured ${owner.name}'s token ${victim.id} at $cell" }
@@ -284,6 +287,11 @@ class GameEngine(
             commitToken(victimIndex, victim.copy(state = TokenState.IN_HOME, positionIndex = -1, boardPosition = home))
         }
         return true
+    }
+
+    private fun emitEffect(kind: BoardEffect.Kind, color: PlayerColor, cell: Pair<Int, Int>?) {
+        if (cell == null) return
+        _state.update { it.copy(effect = BoardEffect(kind, color, cell, ++effectSeq)) }
     }
 
     private fun stateForIndex(index: Int): TokenState = when {

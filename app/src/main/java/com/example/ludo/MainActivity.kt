@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.Surface
 import com.example.ludo.audio.SoundEffectManager
 import com.example.ludo.core.logging.AppLogger
+import com.example.ludo.core.settings.AppSettings
 import com.example.ludo.theme.LudoTheme
 
 class MainActivity : ComponentActivity() {
@@ -18,6 +19,7 @@ class MainActivity : ComponentActivity() {
         // Logging only in debuggable builds; release builds stay silent.
         AppLogger.isLoggingEnabled = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         AppLogger.i("MainActivity") { "MainActivity onCreate" }
+        AppSettings.init(this)
         // The UI is always light, so force dark system-bar icons even when the phone is in dark mode.
         val lightBars = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
         enableEdgeToEdge(statusBarStyle = lightBars, navigationBarStyle = lightBars)

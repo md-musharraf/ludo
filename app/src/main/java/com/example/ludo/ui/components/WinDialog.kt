@@ -1,15 +1,20 @@
 package com.example.ludo.ui.components
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
@@ -20,8 +25,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.model.Player
-import com.example.ludo.theme.TextDark
-import com.example.ludo.theme.TextMuted
+import com.example.ludo.theme.*
 
 @Composable
 fun WinDialog(
@@ -30,27 +34,27 @@ fun WinDialog(
     onHome: () -> Unit
 ) {
     val winner = standings.firstOrNull()
-    val appear = remember { Animatable(0.6f) }
+    val appear = remember { Animatable(0.85f) }
     LaunchedEffect(Unit) {
         appear.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
     }
-    val trophyScale = rememberPulse(active = true, from = 1f, to = 1.15f, durationMs = 600)
+    val bob = rememberPulse(active = true, from = 0f, to = 1f, durationMs = 700)
     val winnerColor = PlayerColorUtils.getComposeColor(winner?.color)
 
     Dialog(
         onDismissRequest = { },
         properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
     ) {
-        Card(
+        LudoCard(
             modifier = Modifier
+                .widthIn(max = 420.dp)
                 .fillMaxWidth()
                 .graphicsLayer {
                     scaleX = appear.value
                     scaleY = appear.value
                 },
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+            elevation = 16.dp,
+            shape = RoundedCornerShape(24.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -58,75 +62,95 @@ fun WinDialog(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = "🏆",
-                    fontSize = 64.sp,
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = trophyScale.value
-                        scaleY = trophyScale.value
+                // Winner's pawn, gently bouncing on its colour tint.
+                if (winner != null) {
+                    Canvas(
+                        Modifier
+                            .size(96.dp)
+                            .clip(CircleShape)
+                            .background(PlayerColorUtils.getLightColor(winner.color))
+                    ) {
+                        val s = size.minDimension
+                        drawPawn(
+                            center = Offset(size.width / 2, size.height / 2 + s * 0.04f),
+                            radius = s * 0.28f,
+                            color = winner.color,
+                            lift = bob.value * s * 0.08f
+                        )
                     }
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(text = "GAME OVER!", fontSize = 26.sp, fontWeight = FontWeight.Black, color = TextDark)
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(winnerColor.copy(alpha = 0.15f))
-                        .border(1.dp, winnerColor.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
-                        .padding(horizontal = 20.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "${winner?.name ?: "Player"} Wins!",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = winnerColor,
-                        textAlign = TextAlign.Center
-                    )
                 }
 
+                Spacer(Modifier.height(16.dp))
+                SectionLabel("Winner")
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${winner?.name ?: "Player"} wins!",
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Black,
+                    color = winnerColor,
+                    textAlign = TextAlign.Center
+                )
+
                 if (standings.size > 1) {
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        for (player in standings.drop(1)) {
-                            Text(
-                                text = "${rankLabel(player.rank)}  ${player.name}",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = PlayerColorUtils.getComposeColor(player.color)
-                            )
+                    Spacer(Modifier.height(18.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ControlShape)
+                            .background(SubtleFill)
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        for (player in standings) {
+                            StandingRow(player)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(22.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onHome,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Home", fontWeight = FontWeight.Medium, color = TextMuted)
-                    }
-
-                    Button(
+                Spacer(Modifier.height(22.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SecondaryButton("Home", onClick = onHome, icon = Icons.Rounded.Home, modifier = Modifier.weight(1f))
+                    PrimaryButton(
+                        "Play Again",
                         onClick = onPlayAgain,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = winnerColor)
-                    ) {
-                        Text("Play Again", fontWeight = FontWeight.Medium, color = Color.White)
-                    }
+                        icon = Icons.Rounded.Refresh,
+                        color = InkDark,
+                        height = 50.dp,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StandingRow(player: Player) {
+    val color = PlayerColorUtils.getComposeColor(player.color)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(if (player.rank == 1) color else SurfaceWhite)
+        ) {
+            Text(
+                "${player.rank}",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (player.rank == 1) Color.White else InkDark
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Box(
+            Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(player.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = InkDark, modifier = Modifier.weight(1f))
+        Text(rankLabel(player.rank), fontSize = 12.sp, color = InkMuted)
     }
 }
