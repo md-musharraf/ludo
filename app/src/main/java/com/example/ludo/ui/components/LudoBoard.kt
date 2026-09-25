@@ -76,6 +76,20 @@ fun LudoBoard(
         if (effect != null) effectProgress.animateTo(1f, tween(EFFECT_MS, easing = FastOutSlowInEasing))
     }
 
+    // Landing: when a move ends, the goti that just arrived gives a small squash-and-bounce.
+    var lastHop by remember { mutableStateOf<HopMove?>(null) }
+    var landed by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val landing = remember { Animatable(1f) }
+    LaunchedEffect(hop) {
+        val finishedHop = lastHop
+        lastHop = hop
+        if (hop == null && finishedHop != null) {
+            landed = finishedHop.playerId to finishedHop.tokenId
+            landing.snapTo(0f)
+            landing.animateTo(1f, tween(LANDING_MS, easing = LinearEasing))
+        }
+    }
+
     val latestSpots by rememberUpdatedState(spots)
     val latestOnTokenClick by rememberUpdatedState(onTokenClick)
 
@@ -87,9 +101,8 @@ fun LudoBoard(
                 scaleX = 0.96f + 0.04f * t
                 scaleY = 0.96f + 0.04f * t
             }
-            .shadow(elevation = 8.dp, shape = BoardShape, ambientColor = InkDark, spotColor = InkDark)
-            .clip(BoardShape)
-            .background(SurfaceWhite)
+            .shadow(elevation = 8.dp, shape = BoardShape, clip = false, ambientColor = InkDark, spotColor = InkDark)
+            .background(SurfaceWhite, BoardShape)
     ) {
         BoardBackdrop()
 
@@ -104,7 +117,7 @@ fun LudoBoard(
                         val row = (tap.y - g.offsetY) / g.cell
                         latestSpots
                             .filter { it.isValid }
-                            .map { it to hypot(it.cx - col, (it.cy - it.radius * 0.6f) - row) }
+                            .map { it to hypot(it.cx - col, (it.cy - it.radius * PIN_CENTER_OFFSET) - row) }
                             .filter { (_, d) -> d <= TAP_RADIUS_CELLS }
                             .minByOrNull { (_, d) -> d }
                             ?.let { (spot, _) -> latestOnTokenClick(spot.tokenId) }
@@ -115,13 +128,19 @@ fun LudoBoard(
             currentPlayer?.let { drawTurnMarker(g, it.color, breathe) }
 
             val introValue = intro.value
+            val landingValue = landing.value
+            val landedKey = landed
             for (spot in spots) {
+                val isLanding = landingValue < 1f && landedKey?.first == spot.playerId && landedKey.second == spot.tokenId
                 drawPawn(
                     center = g.point(spot.cx, spot.cy),
                     radius = spot.radius * g.cell,
                     color = spot.color,
-                    lift = introDrop(introValue, spot.color) * g.cell + if (spot.isValid) pulse * g.cell * 0.14f else 0f,
-                    selectable = if (spot.isValid) pulse else 0f
+                    lift = introDrop(introValue, spot.color) * g.cell +
+                        (if (spot.isValid) pulse * g.cell * 0.12f else 0f) +
+                        (if (isLanding) landingBounce(landingValue) * g.cell else 0f),
+                    selectable = if (spot.isValid) pulse else 0f,
+                    squash = if (isLanding) landingSquash(landingValue) else 0f
                 )
             }
 
@@ -139,7 +158,7 @@ fun LudoBoard(
 /** Static board art. Parameterless so it never recomposes; its own layer caches the drawing. */
 @Composable
 private fun BoardBackdrop() {
-    Canvas(Modifier.fillMaxSize().graphicsLayer()) {
+    Canvas(Modifier.fillMaxSize().clip(BoardShape).graphicsLayer()) {
         val g = BoardGeometry(size)
         for (color in PlayerColor.entries) drawHomeBase(g, color)
         drawTrack(g)
@@ -154,13 +173,19 @@ private fun BoardBackdrop() {
 private const val TAP_RADIUS_CELLS = 1.1f
 private const val EFFECT_MS = 700
 private const val INTRO_MS = 1100
+private const val LANDING_MS = 360
 
-/** Gotis are anchored a little below the cell centre so the pin stays within its square. */
-private const val PAWN_DROP = 0.2f
+/**
+ * A pin spans from 1.57r above its anchor (head) to 0.6r below (ring and shadow), 2.17r in all.
+ * Anchoring it 0.485r below a square's centre centres the whole pin in that square, and a
+ * radius of 0.44 cells keeps it inside the square, so gotis never spill onto the neighbour
+ * above or get clipped at the board's edge.
+ */
+private const val PIN_CENTER_OFFSET = 0.485f
 
-/** Goti size (cell units) when alone on a square, and when waiting in its yard. */
-private const val TRACK_PAWN_RADIUS = 0.58f
-private const val YARD_PAWN_RADIUS = 0.74f
+/** Goti size (cell units) when alone on a square, and when waiting in its roomier yard. */
+private const val TRACK_PAWN_RADIUS = 0.44f
+private const val YARD_PAWN_RADIUS = 0.62f
 
 /** Square board fitted and centred in the canvas; board coordinates are in cell units. */
 private class BoardGeometry(size: Size) {
@@ -209,8 +234,8 @@ private val SocketByHomeCell: Map<Pair<Int, Int>, Pair<Float, Float>> = buildMap
 
 /** Anchor (col, row) for an engine cell: a socket for yard cells, otherwise the square. */
 private fun anchorOf(cell: Pair<Int, Int>): Pair<Float, Float> =
-    SocketByHomeCell[cell]?.let { (c, r) -> c to r + PAWN_DROP * 0.75f }
-        ?: ((cell.second + 0.5f) to (cell.first + 0.5f + PAWN_DROP))
+    SocketByHomeCell[cell]?.let { (c, r) -> c to r + PIN_CENTER_OFFSET * YARD_PAWN_RADIUS * 0.5f }
+        ?: ((cell.second + 0.5f) to (cell.first + 0.5f + PIN_CENTER_OFFSET * TRACK_PAWN_RADIUS))
 
 // Finished gotis line up inside their colour's centre triangle: (col, row, lineIsHorizontal).
 private val GoalAnchors = arrayOf(
@@ -256,7 +281,7 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
         occupants.forEachIndexed { index, (player, token) ->
             val (dx, dy, radius) = stackOffset(occupants.size, index)
             val isValid = humanChoosing && player.id == current?.id && token.id in state.validMoves
-            val drop = PAWN_DROP * radius / TRACK_PAWN_RADIUS
+            val drop = PIN_CENTER_OFFSET * radius
             spots += PawnSpot(player.id, token.id, player.color, col + 0.5f + dx, row + 0.5f + dy + drop, radius, isValid)
         }
     }
@@ -266,20 +291,23 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
     return spots
 }
 
-/** Offset (cell units) and radius for the [index]-th of [count] gotis sharing a cell. */
+/**
+ * Offset (cell units) and radius for the [index]-th of [count] gotis sharing a cell, chosen so
+ * every pin (height 2.17r, ring width 1.3r) stays inside the square.
+ */
 private fun stackOffset(count: Int, index: Int): Triple<Float, Float, Float> = when (count) {
     1 -> Triple(0f, 0f, TRACK_PAWN_RADIUS)
-    2 -> if (index == 0) Triple(-0.18f, -0.1f, 0.42f) else Triple(0.18f, 0.1f, 0.42f)
+    2 -> if (index == 0) Triple(-0.21f, 0f, 0.36f) else Triple(0.21f, 0f, 0.36f)
     3 -> when (index) {
-        0 -> Triple(0f, -0.14f, 0.3f)
-        1 -> Triple(-0.2f, 0.12f, 0.3f)
-        else -> Triple(0.2f, 0.12f, 0.3f)
+        0 -> Triple(0f, -0.12f, 0.3f)
+        1 -> Triple(-0.22f, 0.12f, 0.3f)
+        else -> Triple(0.22f, 0.12f, 0.3f)
     }
     else -> when (index % 4) {
-        0 -> Triple(-0.19f, -0.16f, 0.27f)
-        1 -> Triple(0.19f, -0.16f, 0.27f)
-        2 -> Triple(-0.19f, 0.16f, 0.27f)
-        else -> Triple(0.19f, 0.16f, 0.27f)
+        0 -> Triple(-0.2f, -0.19f, 0.25f)
+        1 -> Triple(0.2f, -0.19f, 0.25f)
+        2 -> Triple(-0.2f, 0.19f, 0.25f)
+        else -> Triple(0.2f, 0.19f, 0.25f)
     }
 }
 
@@ -290,6 +318,13 @@ private fun introDrop(intro: Float, color: PlayerColor): Float {
     val t = ((intro - start) / 0.35f).coerceIn(0f, 1f)
     return (1f - easeOutBack(t)) * 3f
 }
+
+/** Squash right at touch-down, easing back to upright. */
+private fun landingSquash(p: Float): Float = if (p < 0.3f) 0.7f * (1f - p / 0.3f) else 0f
+
+/** One small rebound (cells) after the squash. */
+private fun landingBounce(p: Float): Float =
+    if (p < 0.3f) 0f else sin((p - 0.3f) / 0.7f * PI.toFloat()) * 0.12f * (1f - p * 0.5f)
 
 private fun easeOutBack(t: Float): Float {
     val c1 = 1.70158f
@@ -311,7 +346,7 @@ private fun DrawScope.drawHoppingPawn(g: BoardGeometry, hop: HopMove, color: Pla
     // Longer journeys (e.g. a captured goti flying home) arc higher.
     val distance = hypot(toCol - fromCol, toRow - fromRow)
     val arc = sin(progress * PI.toFloat())
-    val lift = arc * g.cell * (0.6f + 0.12f * distance).coerceAtMost(2f)
+    val lift = arc * g.cell * (0.5f + 0.14f * distance).coerceAtMost(2f)
     // Crouch at take-off and squash on touch-down; neutral at the top of the arc.
     val squash = 0.6f * (((0.15f - progress) / 0.15f).coerceAtLeast(0f) + ((progress - 0.85f) / 0.15f).coerceAtLeast(0f))
 
