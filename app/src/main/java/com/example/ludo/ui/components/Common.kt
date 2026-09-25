@@ -105,6 +105,22 @@ fun LogoMark(size: Dp, modifier: Modifier = Modifier) {
     }
 }
 
+/** The four gotis standing in a row, as a light decorative flourish. */
+@Composable
+fun GotiLineup(modifier: Modifier = Modifier, pawnSize: Dp = 44.dp) {
+    Canvas(modifier.size(width = pawnSize * 4.6f, height = pawnSize * 1.25f)) {
+        val slot = size.width / 4
+        val r = slot * 0.36f
+        com.example.ludo.model.PlayerColor.entries.forEachIndexed { i, color ->
+            drawPawn(
+                center = Offset(slot * (i + 0.5f), size.height - r * 0.55f),
+                radius = r,
+                color = color
+            )
+        }
+    }
+}
+
 /** White rounded card with a hairline border and a soft shadow. */
 @Composable
 fun LudoCard(

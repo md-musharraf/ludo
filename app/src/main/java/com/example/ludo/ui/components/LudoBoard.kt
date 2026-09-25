@@ -6,7 +6,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +19,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -36,13 +36,13 @@ import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
 
-private val BoardShape = RoundedCornerShape(14.dp)
+private val BoardShape = RoundedCornerShape(10.dp)
 
 /**
  * Classic Ludo board, rendered as two layers:
  * 1. [BoardBackdrop]: the static board in its own graphics layer. It reads no state, so it is
  *    recorded once per size and replayed from the RenderNode afterwards.
- * 2. Pawn layer: turn marker, pawns, hops and capture/finish bursts. Animated values are read
+ * 2. Goti layer: turn marker, gotis, hops and capture/finish bursts. Animated values are read
  *    only in the draw phase, so animating redraws this layer without recomposition.
  */
 @Composable
@@ -52,8 +52,14 @@ fun LudoBoard(
     modifier: Modifier = Modifier
 ) {
     val currentPlayer = gameState.currentPlayer
-    val humanChoosing = gameState.gamePhase == GamePhase.WAITING_FOR_MOVE && currentPlayer?.isAI == false
+    val humanTurn = currentPlayer?.isAI == false && !gameState.isGameOver
+    val humanChoosing = gameState.gamePhase == GamePhase.WAITING_FOR_MOVE && humanTurn
     val pulse by rememberPulse(active = humanChoosing, from = 0f, to = 1f, durationMs = 520, idle = 0f)
+    val breathe by rememberPulse(active = humanTurn, from = 0.55f, to = 1f, durationMs = 900, idle = 0.9f)
+
+    // Intro: the board fades in, then each colour's gotis drop into their sockets in turn.
+    val intro = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { intro.animateTo(1f, tween(INTRO_MS, easing = LinearEasing)) }
 
     val spots = remember(gameState) { layoutPawns(gameState) }
 
@@ -75,10 +81,15 @@ fun LudoBoard(
 
     Box(
         modifier
-            .shadow(elevation = 6.dp, shape = BoardShape, ambientColor = InkDark, spotColor = InkDark)
+            .graphicsLayer {
+                val t = (intro.value / 0.35f).coerceIn(0f, 1f)
+                alpha = t
+                scaleX = 0.96f + 0.04f * t
+                scaleY = 0.96f + 0.04f * t
+            }
+            .shadow(elevation = 8.dp, shape = BoardShape, ambientColor = InkDark, spotColor = InkDark)
             .clip(BoardShape)
             .background(SurfaceWhite)
-            .border(1.dp, HairlineBorder, BoardShape)
     ) {
         BoardBackdrop()
 
@@ -89,10 +100,11 @@ fun LudoBoard(
                     detectTapGestures { tap ->
                         val g = BoardGeometry(Size(size.width.toFloat(), size.height.toFloat()))
                         val col = (tap.x - g.offsetX) / g.cell
+                        // Gotis stand above their anchor, so aim at the middle of the pin.
                         val row = (tap.y - g.offsetY) / g.cell
                         latestSpots
                             .filter { it.isValid }
-                            .map { it to hypot(it.cx - col, it.cy - row) }
+                            .map { it to hypot(it.cx - col, (it.cy - it.radius * 0.6f) - row) }
                             .filter { (_, d) -> d <= TAP_RADIUS_CELLS }
                             .minByOrNull { (_, d) -> d }
                             ?.let { (spot, _) -> latestOnTokenClick(spot.tokenId) }
@@ -100,15 +112,16 @@ fun LudoBoard(
                 }
         ) {
             val g = BoardGeometry(size)
-            currentPlayer?.let { drawTurnMarker(g, it.color) }
+            currentPlayer?.let { drawTurnMarker(g, it.color, breathe) }
 
+            val introValue = intro.value
             for (spot in spots) {
                 drawPawn(
                     center = g.point(spot.cx, spot.cy),
                     radius = spot.radius * g.cell,
                     color = spot.color,
-                    lift = if (spot.isValid) pulse * g.cell * 0.12f else 0f,
-                    selectable = if (spot.isValid) 0.4f + 0.6f * pulse else 0f
+                    lift = introDrop(introValue, spot.color) * g.cell + if (spot.isValid) pulse * g.cell * 0.14f else 0f,
+                    selectable = if (spot.isValid) pulse else 0f
                 )
             }
 
@@ -140,6 +153,14 @@ private fun BoardBackdrop() {
 
 private const val TAP_RADIUS_CELLS = 1.1f
 private const val EFFECT_MS = 700
+private const val INTRO_MS = 1100
+
+/** Gotis are anchored a little below the cell centre so the pin stays within its square. */
+private const val PAWN_DROP = 0.2f
+
+/** Goti size (cell units) when alone on a square, and when waiting in its yard. */
+private const val TRACK_PAWN_RADIUS = 0.58f
+private const val YARD_PAWN_RADIUS = 0.74f
 
 /** Square board fitted and centred in the canvas; board coordinates are in cell units. */
 private class BoardGeometry(size: Size) {
@@ -154,7 +175,7 @@ private class BoardGeometry(size: Size) {
     fun cellCenter(cell: Pair<Int, Int>) = point(cell.second + 0.5f, cell.first + 0.5f)
 }
 
-/** A pawn resting on the board. [cx]/[cy]/[radius] are in cell units (cell centre = index + 0.5). */
+/** A goti resting on the board. [cx]/[cy]/[radius] are in cell units; (cx, cy) is its anchor. */
 private class PawnSpot(
     val playerId: Int,
     val tokenId: Int,
@@ -165,12 +186,38 @@ private class PawnSpot(
     val isValid: Boolean
 )
 
-// Finished pawns line up inside their colour's centre triangle: (col, row, lineIsHorizontal).
+/** Top-left cell (row, col) of each colour's 6x6 base, by colour ordinal. */
+private val BaseOrigins = arrayOf(0 to 0, 0 to 9, 9 to 9, 9 to 0)
+
+/** Yard inset from the base edge, and socket centres within the base (cell units). */
+private const val YARD_INSET = 0.85f
+private val SocketOffsets = floatArrayOf(1.95f, 4.05f)
+private const val SOCKET_RADIUS = 0.6f
+
+/** Socket centre (col, row in cell units) for a colour's token slot 0..3. */
+private fun socketCenter(colorOrdinal: Int, tokenId: Int): Pair<Float, Float> {
+    val (row, col) = BaseOrigins[colorOrdinal]
+    return (col + SocketOffsets[tokenId % 2]) to (row + SocketOffsets[(tokenId / 2) % 2])
+}
+
+// Engine yard cells → socket, so hops into and out of a yard land exactly on the socket.
+private val SocketByHomeCell: Map<Pair<Int, Int>, Pair<Float, Float>> = buildMap {
+    for ((ordinal, cells) in BoardConfig.homePositions) {
+        cells.forEachIndexed { id, cell -> put(cell, socketCenter(ordinal, id)) }
+    }
+}
+
+/** Anchor (col, row) for an engine cell: a socket for yard cells, otherwise the square. */
+private fun anchorOf(cell: Pair<Int, Int>): Pair<Float, Float> =
+    SocketByHomeCell[cell]?.let { (c, r) -> c to r + PAWN_DROP * 0.75f }
+        ?: ((cell.second + 0.5f) to (cell.first + 0.5f + PAWN_DROP))
+
+// Finished gotis line up inside their colour's centre triangle: (col, row, lineIsHorizontal).
 private val GoalAnchors = arrayOf(
-    Triple(6.45f, 7.5f, false), // Red, left triangle
-    Triple(7.5f, 6.45f, true),  // Green, top triangle
-    Triple(8.55f, 7.5f, false), // Yellow, right triangle
-    Triple(7.5f, 8.55f, true)   // Blue, bottom triangle
+    Triple(6.45f, 7.6f, false), // Red, left triangle
+    Triple(7.5f, 6.55f, true),  // Green, top triangle
+    Triple(8.55f, 7.6f, false), // Yellow, right triangle
+    Triple(7.5f, 8.65f, true)   // Blue, bottom triangle
 )
 
 private fun layoutPawns(state: GameState): List<PawnSpot> {
@@ -187,8 +234,8 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
             val isValid = humanChoosing && player.id == current?.id && token.id in state.validMoves
             when (token.state) {
                 TokenState.IN_HOME -> {
-                    val (row, col) = BoardConfig.homeSpot(player.color.ordinal, token.id)
-                    spots += PawnSpot(player.id, token.id, player.color, col + 0.5f, row + 0.5f, 0.44f, isValid)
+                    val (cx, cy) = anchorOf(BoardConfig.homeSpot(player.color.ordinal, token.id))
+                    spots += PawnSpot(player.id, token.id, player.color, cx, cy, YARD_PAWN_RADIUS, isValid)
                 }
                 TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> {
                     token.boardPosition?.let { byCell.getOrPut(it) { ArrayList(2) }.add(player to token) }
@@ -198,7 +245,7 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
                     val shift = (finished.indexOf(token) - (finished.size - 1) / 2f) * 0.34f
                     val cx = if (horizontal) ax + shift else ax
                     val cy = if (horizontal) ay else ay + shift
-                    spots += PawnSpot(player.id, token.id, player.color, cx, cy, 0.2f, false)
+                    spots += PawnSpot(player.id, token.id, player.color, cx, cy, 0.24f, false)
                 }
             }
         }
@@ -209,30 +256,46 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
         occupants.forEachIndexed { index, (player, token) ->
             val (dx, dy, radius) = stackOffset(occupants.size, index)
             val isValid = humanChoosing && player.id == current?.id && token.id in state.validMoves
-            spots += PawnSpot(player.id, token.id, player.color, col + 0.5f + dx, row + 0.5f + dy, radius, isValid)
+            val drop = PAWN_DROP * radius / TRACK_PAWN_RADIUS
+            spots += PawnSpot(player.id, token.id, player.color, col + 0.5f + dx, row + 0.5f + dy + drop, radius, isValid)
         }
     }
 
-    // Paint back-to-front so lower pawns overlap the ones above them.
+    // Paint back-to-front so lower gotis overlap the ones above them.
     spots.sortBy { it.cy }
     return spots
 }
 
-/** Offset (cell units) and radius for the [index]-th of [count] pawns sharing a cell. */
+/** Offset (cell units) and radius for the [index]-th of [count] gotis sharing a cell. */
 private fun stackOffset(count: Int, index: Int): Triple<Float, Float, Float> = when (count) {
-    1 -> Triple(0f, 0f, 0.44f)
-    2 -> if (index == 0) Triple(-0.16f, -0.12f, 0.32f) else Triple(0.16f, 0.12f, 0.32f)
+    1 -> Triple(0f, 0f, TRACK_PAWN_RADIUS)
+    2 -> if (index == 0) Triple(-0.18f, -0.1f, 0.42f) else Triple(0.18f, 0.1f, 0.42f)
     3 -> when (index) {
-        0 -> Triple(0f, -0.16f, 0.28f)
-        1 -> Triple(-0.18f, 0.14f, 0.28f)
-        else -> Triple(0.18f, 0.14f, 0.28f)
+        0 -> Triple(0f, -0.14f, 0.3f)
+        1 -> Triple(-0.2f, 0.12f, 0.3f)
+        else -> Triple(0.2f, 0.12f, 0.3f)
     }
     else -> when (index % 4) {
-        0 -> Triple(-0.18f, -0.18f, 0.24f)
-        1 -> Triple(0.18f, -0.18f, 0.24f)
-        2 -> Triple(-0.18f, 0.18f, 0.24f)
-        else -> Triple(0.18f, 0.18f, 0.24f)
+        0 -> Triple(-0.19f, -0.16f, 0.27f)
+        1 -> Triple(0.19f, -0.16f, 0.27f)
+        2 -> Triple(-0.19f, 0.16f, 0.27f)
+        else -> Triple(0.19f, 0.16f, 0.27f)
     }
+}
+
+/** How high (cells) a colour's gotis still hang during the intro drop; 0 once landed. */
+private fun introDrop(intro: Float, color: PlayerColor): Float {
+    if (intro >= 1f) return 0f
+    val start = 0.3f + color.ordinal * 0.1f
+    val t = ((intro - start) / 0.35f).coerceIn(0f, 1f)
+    return (1f - easeOutBack(t)) * 3f
+}
+
+private fun easeOutBack(t: Float): Float {
+    val c1 = 1.70158f
+    val c3 = c1 + 1f
+    val u = t - 1f
+    return 1f + c3 * u * u * u + c1 * u * u
 }
 
 // endregion
@@ -241,38 +304,37 @@ private fun stackOffset(count: Int, index: Int): Triple<Float, Float, Float> = w
 
 private fun DrawScope.drawHoppingPawn(g: BoardGeometry, hop: HopMove, color: PlayerColor, progress: Float) {
     val eased = (1f - cos(progress * PI.toFloat())) / 2f
-    val fromCol = hop.from.second + 0.5f
-    val fromRow = hop.from.first + 0.5f
-    val toCol = hop.to.second + 0.5f
-    val toRow = hop.to.first + 0.5f
+    val (fromCol, fromRow) = anchorOf(hop.from)
+    val (toCol, toRow) = anchorOf(hop.to)
 
     val ground = g.point(fromCol + (toCol - fromCol) * eased, fromRow + (toRow - fromRow) * eased)
-    // Longer journeys (e.g. a captured pawn flying home) arc higher.
+    // Longer journeys (e.g. a captured goti flying home) arc higher.
     val distance = hypot(toCol - fromCol, toRow - fromRow)
     val arc = sin(progress * PI.toFloat())
-    val lift = arc * g.cell * (0.55f + 0.12f * distance).coerceAtMost(2f)
+    val lift = arc * g.cell * (0.6f + 0.12f * distance).coerceAtMost(2f)
+    // Crouch at take-off and squash on touch-down; neutral at the top of the arc.
+    val squash = 0.6f * (((0.15f - progress) / 0.15f).coerceAtLeast(0f) + ((progress - 0.85f) / 0.15f).coerceAtLeast(0f))
 
-    drawPawn(center = ground, radius = g.cell * 0.44f * (1f + arc * 0.12f), color = color, lift = lift)
+    // Blend sizes so a goti leaving (or flying back to) its yard never snaps in size.
+    fun sizeAt(cell: Pair<Int, Int>) = if (SocketByHomeCell.containsKey(cell)) YARD_PAWN_RADIUS else TRACK_PAWN_RADIUS
+    val radius = sizeAt(hop.from) + (sizeAt(hop.to) - sizeAt(hop.from)) * eased
+    drawPawn(center = ground, radius = g.cell * radius * (1f + arc * 0.1f), color = color, lift = lift, squash = squash)
 }
 
-/** Top-left cell (row, col) of each colour's 6x6 base, by colour ordinal. */
-private val BaseOrigins = arrayOf(0 to 0, 0 to 9, 9 to 9, 9 to 0)
-
-/** White ring inside the active player's base frame. */
-private fun DrawScope.drawTurnMarker(g: BoardGeometry, color: PlayerColor) {
+/** Breathing white ring inside the active player's base frame. */
+private fun DrawScope.drawTurnMarker(g: BoardGeometry, color: PlayerColor, strength: Float) {
     val (row, col) = BaseOrigins[color.ordinal]
-    val inset = g.cell * 0.36f
-    val stroke = g.cell * 0.1f
+    val inset = g.cell * 0.4f
     drawRoundRect(
-        color = Color.White.copy(alpha = 0.9f),
+        color = Color.White.copy(alpha = 0.95f * strength),
         topLeft = Offset(g.x(col.toFloat()) + inset, g.y(row.toFloat()) + inset),
         size = Size(g.cell * 6 - inset * 2, g.cell * 6 - inset * 2),
-        cornerRadius = CornerRadius(g.cell * 0.55f),
-        style = Stroke(width = stroke)
+        cornerRadius = CornerRadius(g.cell * 0.35f),
+        style = Stroke(width = g.cell * 0.1f)
     )
 }
 
-/** Expanding ring plus radiating sparks; gold sparks mark a piece reaching home. */
+/** Expanding ring plus radiating sparks; gold sparks mark a goti reaching home. */
 private fun DrawScope.drawEffect(g: BoardGeometry, effect: BoardEffect, p: Float) {
     val color = PlayerColorUtils.getComposeColor(effect.color)
     val isFinish = effect.kind == BoardEffect.Kind.FINISH
@@ -304,13 +366,13 @@ private fun DrawScope.drawEffect(g: BoardGeometry, effect: BoardEffect, p: Float
 // region Static board art
 
 // Main-thread-only scratch paths for the static layer.
-private val sharedArrowPath = Path()
 private val sharedStarPath = Path()
 private val sharedTrianglePath = Path()
 
+/** Bold solid base, white yard, and four solid coloured sockets. */
 private fun DrawScope.drawHomeBase(g: BoardGeometry, player: PlayerColor) {
     val color = PlayerColorUtils.getComposeColor(player)
-    val light = PlayerColorUtils.getLightColor(player)
+    val dark = PlayerColorUtils.getPawnColorScheme(player).darkColor
     val (row, col) = BaseOrigins[player.ordinal]
     val x = g.x(col.toFloat())
     val y = g.y(row.toFloat())
@@ -318,22 +380,19 @@ private fun DrawScope.drawHomeBase(g: BoardGeometry, player: PlayerColor) {
 
     drawRect(color = color, topLeft = Offset(x, y), size = Size(homeSize, homeSize))
 
-    // White yard with a hairline edge.
-    val inset = g.cell * 0.75f
-    val yardSize = homeSize - inset * 2
+    val inset = g.cell * YARD_INSET
     drawRoundRect(
         color = Color.White,
         topLeft = Offset(x + inset, y + inset),
-        size = Size(yardSize, yardSize),
-        cornerRadius = CornerRadius(g.cell * 0.45f)
+        size = Size(homeSize - inset * 2, homeSize - inset * 2),
+        cornerRadius = CornerRadius(g.cell * 0.12f)
     )
 
-    // Four ringed spots where pieces wait.
-    val spotRadius = g.cell * 0.6f
-    for (spot in BoardConfig.homePositions.getValue(player.ordinal)) {
-        val center = g.cellCenter(spot)
-        drawCircle(light, spotRadius, center)
-        drawCircle(color, spotRadius, center, style = Stroke(g.cell * 0.07f))
+    for (id in 0 until 4) {
+        val (sc, sr) = socketCenter(player.ordinal, id)
+        val center = g.point(sc, sr)
+        drawCircle(color, g.cell * SOCKET_RADIUS, center)
+        drawCircle(dark.copy(alpha = 0.35f), g.cell * SOCKET_RADIUS, center, style = Stroke(g.cell * 0.05f))
     }
 }
 
@@ -346,62 +405,45 @@ private fun DrawScope.drawTrack(g: BoardGeometry) {
         for (cell in BoardConfig.homeColumns[color.ordinal].dropLast(1)) colored[cell] = c // Last cell sits in the centre
     }
     val cells = BoardConfig.mainTrack + BoardConfig.homeColumns.flatMap { it.dropLast(1) }
+    val line = Stroke(width = 1.dp.toPx())
     for (cell in cells) {
         val topLeft = g.point(cell.second.toFloat(), cell.first.toFloat())
-        val fill = colored[cell]
-        if (fill != null) drawRect(fill, topLeft, cellSize)
-        drawRect(
-            color = if (fill != null) Color.White.copy(alpha = 0.35f) else BoardLine,
-            topLeft = topLeft,
-            size = cellSize,
-            style = Stroke(width = 1.dp.toPx())
-        )
+        colored[cell]?.let { drawRect(it, topLeft, cellSize) }
+        drawRect(color = Color(0xFFC9CDD2), topLeft = topLeft, size = cellSize, style = line)
     }
 }
 
-// Entry arrows pointing into each home column: (col, row, angle) by colour ordinal.
+// Thin arrows on the square before each home column: (col, row, angle) by colour ordinal.
 private val ArrowSpecs = arrayOf(Triple(0, 7, 0f), Triple(7, 0, 90f), Triple(14, 7, 180f), Triple(7, 14, 270f))
 
 private fun DrawScope.drawTrackArrows(g: BoardGeometry) {
     for (color in PlayerColor.entries) {
         val (col, row, angle) = ArrowSpecs[color.ordinal]
-        drawDirectionArrow(g.point(col + 0.5f, row + 0.5f), g.cell * 0.46f, PlayerColorUtils.getComposeColor(color), angle)
+        drawLineArrow(g.point(col + 0.5f, row + 0.5f), g.cell * 0.56f, PlayerColorUtils.getComposeColor(color), angle, g.cell * 0.07f)
     }
 }
 
-private fun DrawScope.drawDirectionArrow(center: Offset, size: Float, color: Color, angleDeg: Float) {
-    val half = size / 2
+private fun DrawScope.drawLineArrow(center: Offset, length: Float, color: Color, angleDeg: Float, width: Float) {
     val rad = Math.toRadians(angleDeg.toDouble())
     val cosA = cos(rad).toFloat()
     val sinA = sin(rad).toFloat()
-
     fun rotated(px: Float, py: Float) = Offset(center.x + px * cosA - py * sinA, center.y + px * sinA + py * cosA)
 
+    val half = length / 2
     val tip = rotated(half, 0f)
-    val top = rotated(-half, -half * 0.7f)
-    val mid = rotated(-half * 0.35f, 0f)
-    val bottom = rotated(-half, half * 0.7f)
-
-    sharedArrowPath.reset()
-    sharedArrowPath.moveTo(tip.x, tip.y)
-    sharedArrowPath.lineTo(top.x, top.y)
-    sharedArrowPath.lineTo(mid.x, mid.y)
-    sharedArrowPath.lineTo(bottom.x, bottom.y)
-    sharedArrowPath.close()
-    drawPath(sharedArrowPath, color = color, style = Fill)
+    drawLine(color, rotated(-half, 0f), tip, width, StrokeCap.Round)
+    drawLine(color, tip, rotated(half - length * 0.35f, -length * 0.3f), width, StrokeCap.Round)
+    drawLine(color, tip, rotated(half - length * 0.35f, length * 0.3f), width, StrokeCap.Round)
 }
 
-/** Grey outlined stars on the neutral safe squares, white stars on the coloured start squares. */
+/** Outlined stars on the neutral safe squares. */
 private fun DrawScope.drawSafeSquares(g: BoardGeometry) {
     for (index in BoardConfig.starSpotIndices) {
-        drawStar(g.cellCenter(BoardConfig.mainTrack[index]), g.cell * 0.34f, SubtleFill, InkFaint)
-    }
-    for (start in BoardConfig.startIndices) {
-        drawStar(g.cellCenter(BoardConfig.mainTrack[start]), g.cell * 0.3f, Color.White.copy(alpha = 0.9f), null)
+        drawStar(g.cellCenter(BoardConfig.mainTrack[index]), g.cell * 0.36f, Color.White, Color(0xFF9AA1A9))
     }
 }
 
-private fun DrawScope.drawStar(center: Offset, radius: Float, fillColor: Color, strokeColor: Color?) {
+private fun DrawScope.drawStar(center: Offset, radius: Float, fillColor: Color, strokeColor: Color) {
     val points = 5
     sharedStarPath.reset()
     for (i in 0 until points * 2) {
@@ -413,7 +455,7 @@ private fun DrawScope.drawStar(center: Offset, radius: Float, fillColor: Color, 
     }
     sharedStarPath.close()
     drawPath(sharedStarPath, color = fillColor, style = Fill)
-    if (strokeColor != null) drawPath(sharedStarPath, color = strokeColor, style = Stroke(width = 1.2.dp.toPx()))
+    drawPath(sharedStarPath, color = strokeColor, style = Stroke(width = 1.4.dp.toPx()))
 }
 
 // Outer corners (col, row offsets from centre, in cells) of each colour's centre triangle.
@@ -426,7 +468,6 @@ private val TriangleCorners = arrayOf(
 
 private fun DrawScope.drawCenterHome(g: BoardGeometry) {
     val center = g.point(7.5f, 7.5f)
-    val seam = Stroke(width = 1.5.dp.toPx())
     for (color in PlayerColor.entries) {
         val c = TriangleCorners[color.ordinal]
         sharedTrianglePath.reset()
@@ -435,7 +476,6 @@ private fun DrawScope.drawCenterHome(g: BoardGeometry) {
         sharedTrianglePath.lineTo(center.x, center.y)
         sharedTrianglePath.close()
         drawPath(sharedTrianglePath, color = PlayerColorUtils.getComposeColor(color), style = Fill)
-        drawPath(sharedTrianglePath, color = Color.White.copy(alpha = 0.6f), style = seam)
     }
 }
 

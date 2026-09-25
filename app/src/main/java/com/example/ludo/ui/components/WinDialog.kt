@@ -71,9 +71,10 @@ fun WinDialog(
                             .background(PlayerColorUtils.getLightColor(winner.color))
                     ) {
                         val s = size.minDimension
+                        val r = s * 0.3f
                         drawPawn(
-                            center = Offset(size.width / 2, size.height / 2 + s * 0.04f),
-                            radius = s * 0.28f,
+                            center = Offset(size.width / 2, size.height / 2 + pawnVisualCenterOffset(r)),
+                            radius = r,
                             color = winner.color,
                             lift = bob.value * s * 0.08f
                         )

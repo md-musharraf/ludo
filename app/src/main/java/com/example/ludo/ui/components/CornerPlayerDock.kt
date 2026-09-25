@@ -132,7 +132,8 @@ fun PawnAvatar(color: PlayerColor, modifier: Modifier = Modifier, size: androidx
             .clip(CircleShape)
             .background(PlayerColorUtils.getLightColor(color))
     ) {
-        drawPawn(center = Offset(this.size.width / 2, this.size.height / 2), radius = this.size.minDimension * 0.3f, color = color)
+        val r = this.size.minDimension * 0.3f
+        drawPawn(center = Offset(this.size.width / 2, this.size.height / 2 + pawnVisualCenterOffset(r)), radius = r, color = color)
     }
 }
 

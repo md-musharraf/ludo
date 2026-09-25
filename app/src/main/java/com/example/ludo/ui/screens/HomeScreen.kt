@@ -57,8 +57,8 @@ fun HomeScreen(onStartGame: (Int, Boolean, AiDifficulty) -> Unit) {
 
         val brand = @Composable { modifier: Modifier ->
             Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-                LogoMark(size = if (compact) 64.dp else 84.dp)
-                Spacer(Modifier.height(if (compact) 12.dp else 18.dp))
+                GotiLineup(pawnSize = if (compact) 36.dp else 46.dp)
+                Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
                 LudoTitle(fontSize = if (compact) 40.sp else 52.sp)
                 Text("The classic board game", fontSize = 14.sp, color = InkMuted, fontWeight = FontWeight.Medium)
             }

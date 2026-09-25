@@ -405,8 +405,8 @@ class GameEngine(
         const val AUTO_MOVE_MS = 250L
         const val AI_THINK_MS = 450L
         const val AI_ROLL_DELAY_MS = 550L
-        const val STEP_HOP_MS = 150
-        const val LEAVE_BASE_HOP_MS = 240
-        const val CAPTURE_HOP_MS = 380
+        const val STEP_HOP_MS = 170
+        const val LEAVE_BASE_HOP_MS = 300
+        const val CAPTURE_HOP_MS = 450
     }
 }
