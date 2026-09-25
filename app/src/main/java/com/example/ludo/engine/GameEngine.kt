@@ -3,402 +3,353 @@ package com.example.ludo.engine
 import com.example.ludo.audio.SoundEffectManager
 import com.example.ludo.core.logging.AppLogger
 import com.example.ludo.model.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /**
- * Robust, high-performance Game Engine for Ludo.
- * - Thread-safe atomic StateFlow updates.
- * - Managed Job cancellation preventing background coroutine leaks on game reset.
- * - Strict guard clauses against rapid-tap race conditions and unauthorized move executions.
+ * Ludo rules engine and turn driver.
+ *
+ * Thread confinement: every public method must be called from the thread backing [scope]
+ * (the main thread when [scope] is `viewModelScope`). All engine coroutines run on that same
+ * scope, so check-then-update sequences are race free without locks.
+ *
+ * Human entry points ([rollDice], [selectToken]) are rejected while an AI player is on turn,
+ * so the UI can never act on behalf of a bot.
  */
-class GameEngine {
+class GameEngine(
+    private val scope: CoroutineScope,
+    private val random: Random = Random.Default
+) {
     private val _state = MutableStateFlow(GameState())
     val state: StateFlow<GameState> = _state.asStateFlow()
 
     private val moveValidator = MoveValidator()
-    private val engineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var aiPlayer: AIPlayer? = null
-    private var currentActionJob: Job? = null
+    private var gameJob: Job = SupervisorJob()
+    private var hopSeq = 0L
 
-    fun resetGame(playerCount: Int, isVsAI: Boolean, aiDifficulty: String = "Hard") {
-        currentActionJob?.cancel()
-        AppLogger.i("GameEngine") { "Resetting game: players=$playerCount, isVsAI=$isVsAI, difficulty=$aiDifficulty" }
+    fun resetGame(playerCount: Int, isVsAI: Boolean, aiDifficulty: AiDifficulty = AiDifficulty.HARD) {
+        gameJob.cancel()
+        gameJob = SupervisorJob(scope.coroutineContext[Job])
+        AppLogger.i(TAG) { "Resetting game: players=$playerCount, isVsAI=$isVsAI, difficulty=$aiDifficulty" }
 
         val selectedColors = when (playerCount) {
             2 -> listOf(PlayerColor.RED, PlayerColor.YELLOW)
             3 -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW)
-            else -> listOf(PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW, PlayerColor.BLUE)
+            else -> PlayerColor.entries
         }
 
-        val players = ArrayList<Player>(selectedColors.size)
-        for (i in selectedColors.indices) {
-            val color = selectedColors[i]
+        val players = selectedColors.mapIndexed { i, color ->
             val isAI = isVsAI && i > 0
             val colorOrdinal = color.ordinal
-            val tokens = List(4) { tokenId ->
-                Token(
-                    id = tokenId,
-                    playerId = colorOrdinal,
-                    boardPosition = BoardConfig.homePositions[colorOrdinal]?.getOrNull(tokenId)
-                )
-            }
-            val defaultName = if (isAI) "Bot ${color.name.lowercase().replaceFirstChar { it.uppercase() }}"
-            else "Player ${i + 1}"
-
-            players.add(
-                Player(
-                    id = colorOrdinal,
-                    color = color,
-                    name = defaultName,
-                    isAI = isAI,
-                    tokens = tokens
-                )
+            Player(
+                id = colorOrdinal,
+                color = color,
+                name = if (isAI) "Bot ${color.displayName()}" else "Player ${i + 1}",
+                isAI = isAI,
+                tokens = List(4) { tokenId ->
+                    Token(id = tokenId, playerId = colorOrdinal, boardPosition = BoardConfig.homeSpot(colorOrdinal, tokenId))
+                }
             )
         }
 
         _state.value = GameState(
             players = players,
-            currentPlayerIndex = 0,
-            gamePhase = GamePhase.WAITING_FOR_ROLL,
-            moveMessage = "${players.firstOrNull()?.name ?: "Player"}'s turn! Roll your corner dice 🎲"
+            moveMessage = rollPrompt(players.first())
+        )
+        aiPlayer = if (isVsAI) AIPlayer(aiDifficulty, random) else null
+        continueTurn()
+    }
+
+    /** Replaces the whole game state (tests and save/restore), cancelling any in-flight turn. */
+    internal fun loadState(state: GameState, aiDifficulty: AiDifficulty = AiDifficulty.HARD) {
+        gameJob.cancel()
+        gameJob = SupervisorJob(scope.coroutineContext[Job])
+        _state.value = state
+        aiPlayer = if (state.players.any { it.isAI }) AIPlayer(aiDifficulty, random) else null
+        continueTurn()
+    }
+
+    /** Human roll request. Ignored when it is not a human's turn or a roll is not allowed now. */
+    fun rollDice() {
+        if (_state.value.currentPlayer?.isAI != false) return
+        val roller = beginRoll() ?: return
+        launch { finishRoll(roller) }
+    }
+
+    /** Human token selection. Ignored for AI turns and for tokens that are not valid moves. */
+    fun selectToken(tokenId: Int) {
+        if (_state.value.currentPlayer?.isAI != false) return
+        val plan = beginMove(tokenId) ?: return
+        launch { runMove(plan) }
+    }
+
+    // region Rolling
+
+    /** Synchronously claims the roll so double taps cannot start two rolls. */
+    private fun beginRoll(): Player? {
+        val s = _state.value
+        if (s.gamePhase != GamePhase.WAITING_FOR_ROLL || s.isGameOver || s.isDiceRollingForPlayer != null) return null
+        val player = s.currentPlayer ?: return null
+        AppLogger.d(TAG) { "${player.name} initiated dice roll" }
+        _state.update { it.copy(isDiceRollingForPlayer = player.id, moveMessage = "${player.name} is rolling...") }
+        SoundEffectManager.playDiceRoll()
+        return player
+    }
+
+    private suspend fun finishRoll(player: Player) {
+        delay(ROLL_MS)
+        val roll = random.nextInt(1, 7)
+        AppLogger.i(TAG) { "${player.name} rolled: $roll" }
+        if (roll == 6) SoundEffectManager.playSixRolled()
+
+        val sixes = if (roll == 6) _state.value.consecutiveSixes + 1 else 0
+        val rolled = _state.value.copy(
+            diceResult = DiceResult(roll),
+            isDiceRollingForPlayer = null,
+            consecutiveSixes = sixes,
+            validMoves = emptyList()
         )
 
-        aiPlayer = if (isVsAI) AIPlayer(this, aiDifficulty) else null
-
-        checkAI()
-    }
-
-    fun rollDice() {
-        val currentState = _state.value
-        if (currentState.gamePhase != GamePhase.WAITING_FOR_ROLL || currentState.isGameOver) return
-        if (currentState.isDiceRollingForPlayer != null) return // Debounce roll attempts
-
-        val currentPlayer = currentState.players.getOrNull(currentState.currentPlayerIndex) ?: return
-        AppLogger.d("GameEngine") { "${currentPlayer.name} initiated dice roll" }
-
-        _state.update {
-            it.copy(
-                isDiceRollingForPlayer = currentPlayer.id,
-                moveMessage = "${currentPlayer.name} is rolling..."
-            )
+        if (sixes >= MAX_CONSECUTIVE_SIXES) {
+            AppLogger.w(TAG) { "${player.name} rolled three consecutive sixes! Turn forfeited." }
+            _state.value = rolled.copy(moveMessage = "Three 6s! Turn forfeited ⚠️")
+            delay(TURN_PAUSE_MS)
+            advanceTurn()
+            return
         }
 
-        SoundEffectManager.playDiceRoll()
+        val moves = moveValidator.getValidMoves(rolled)
+        if (moves.isEmpty()) {
+            _state.value = rolled.copy(moveMessage = "${player.name} rolled a $roll. No valid moves!")
+            delay(TURN_PAUSE_MS)
+            advanceTurn()
+            return
+        }
 
-        currentActionJob?.cancel()
-        currentActionJob = engineScope.launch {
-            delay(480) // Fluid physical dice tumble duration
+        val bonusText = if (roll == 6) " (Bonus roll on 6!)" else ""
+        val autoMove = if (player.isAI) aiPlayer?.chooseMove(rolled, moves) else obviousMove(player, moves)
+        val message = when {
+            player.isAI -> "${player.name} rolled $roll! Thinking...$bonusText"
+            autoMove != null -> "${player.name} rolled $roll! Auto-moving piece...$bonusText"
+            else -> "${player.name} rolled a $roll! Tap a glowing piece$bonusText"
+        }
+        _state.value = rolled.copy(gamePhase = GamePhase.WAITING_FOR_MOVE, validMoves = moves, moveMessage = message)
 
-            val roll = (1..6).random()
-            AppLogger.i("GameEngine") { "${currentPlayer.name} rolled: $roll" }
-
-            if (roll == 6) {
-                SoundEffectManager.playSixRolled()
-            }
-
-            val stateWithRoll = _state.value.copy(
-                diceResult = DiceResult(roll),
-                isDiceRollingForPlayer = null
-            )
-            val validMoves = moveValidator.getValidMoves(stateWithRoll)
-
-            if (validMoves.isEmpty()) {
-                _state.update {
-                    it.copy(
-                        diceResult = DiceResult(roll),
-                        isDiceRollingForPlayer = null,
-                        consecutiveSixes = 0,
-                        validMoves = emptyList(),
-                        moveMessage = "Rolled a $roll. No valid moves!"
-                    )
-                }
-                delay(850)
-                nextTurn()
-            } else {
-                val consecutive = if (roll == 6) currentState.consecutiveSixes + 1 else 0
-                if (consecutive >= 3) {
-                    AppLogger.w("GameEngine") { "${currentPlayer.name} rolled three consecutive sixes! Turn forfeited." }
-                    _state.update {
-                        it.copy(
-                            diceResult = DiceResult(roll),
-                            isDiceRollingForPlayer = null,
-                            consecutiveSixes = 0,
-                            validMoves = emptyList(),
-                            moveMessage = "Three 6s! Turn forfeited ⚠️"
-                        )
-                    }
-                    delay(850)
-                    nextTurn()
-                } else {
-                    val extraRollText = if (roll == 6) " (Bonus roll on 6!)" else ""
-
-                    if (currentPlayer.isAI) {
-                        _state.update {
-                            it.copy(
-                                diceResult = DiceResult(roll),
-                                isDiceRollingForPlayer = null,
-                                validMoves = validMoves,
-                                consecutiveSixes = consecutive,
-                                gamePhase = GamePhase.WAITING_FOR_MOVE,
-                                isAutoMoving = false,
-                                moveMessage = "${currentPlayer.name} rolled $roll! AI is choosing piece...$extraRollText"
-                            )
-                        }
-                        aiPlayer?.executeMove(validMoves)
-                    } else {
-                        if (validMoves.size == 1) {
-                            val autoTokenId = validMoves.first()
-                            _state.update {
-                                it.copy(
-                                    diceResult = DiceResult(roll),
-                                    isDiceRollingForPlayer = null,
-                                    validMoves = validMoves,
-                                    consecutiveSixes = consecutive,
-                                    gamePhase = GamePhase.WAITING_FOR_MOVE,
-                                    isAutoMoving = true,
-                                    moveMessage = "${currentPlayer.name} rolled $roll! Auto-moving piece...$extraRollText"
-                                )
-                            }
-                            delay(280)
-                            selectToken(autoTokenId)
-                        } else {
-                            _state.update {
-                                it.copy(
-                                    diceResult = DiceResult(roll),
-                                    isDiceRollingForPlayer = null,
-                                    validMoves = validMoves,
-                                    consecutiveSixes = consecutive,
-                                    gamePhase = GamePhase.WAITING_FOR_MOVE,
-                                    isAutoMoving = false,
-                                    moveMessage = "${currentPlayer.name} rolled a $roll! Tap a glowing piece to move$extraRollText"
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+        if (autoMove != null) {
+            delay(if (player.isAI) AI_THINK_MS else AUTO_MOVE_MS)
+            beginMove(autoMove)?.let { runMove(it) }
         }
     }
 
-    fun selectToken(tokenId: Int) {
-        val currentState = _state.value
-        if (currentState.gamePhase != GamePhase.WAITING_FOR_MOVE || currentState.isGameOver) return
-        if (!currentState.validMoves.contains(tokenId)) return
+    /**
+     * Returns a token to auto-move when the choice doesn't matter: a single option, or every
+     * option is an identical token (e.g. several pieces still in base on a 6).
+     */
+    private fun obviousMove(player: Player, moves: List<Int>): Int? {
+        val candidates = player.tokens.filter { it.id in moves }
+        val first = candidates.firstOrNull() ?: return null
+        return first.id.takeIf {
+            candidates.all { it.state == first.state && it.positionIndex == first.positionIndex }
+        }
+    }
 
-        val playerIndex = currentState.currentPlayerIndex
-        val player = currentState.players.getOrNull(playerIndex) ?: return
-        val colorOrdinal = player.color.ordinal
-        val tokenIndex = player.tokens.indexOfFirst { it.id == tokenId }
-        if (tokenIndex == -1) return
+    // endregion
 
-        val token = player.tokens[tokenIndex]
-        val diceRoll = currentState.diceResult?.value ?: return
+    // region Moving
 
-        AppLogger.i("GameEngine") { "${player.name} selected token $tokenId (pos: ${token.positionIndex})" }
+    private class MovePlan(val playerIndex: Int, val token: Token, val roll: Int)
 
+    /** Synchronously validates and claims the move so a token can't be moved twice. */
+    private fun beginMove(tokenId: Int): MovePlan? {
+        val s = _state.value
+        if (s.gamePhase != GamePhase.WAITING_FOR_MOVE || s.isGameOver || tokenId !in s.validMoves) return null
+        val player = s.currentPlayer ?: return null
+        val token = player.tokens.firstOrNull { it.id == tokenId } ?: return null
+        val roll = s.diceResult?.value ?: return null
+
+        AppLogger.i(TAG) { "${player.name} moves token $tokenId (pos: ${token.positionIndex}) by $roll" }
         _state.update {
             it.copy(
                 gamePhase = GamePhase.ANIMATING_MOVE,
-                animatingTokenId = tokenId,
-                animatingPlayerId = player.id,
                 validMoves = emptyList(),
-                isAutoMoving = false,
                 moveMessage = "${player.name} is moving piece ${tokenId + 1}..."
             )
         }
-
-        currentActionJob?.cancel()
-        currentActionJob = engineScope.launch {
-            val path = PathMapper.getPlayerPath(colorOrdinal)
-
-            if (token.state == TokenState.IN_HOME) {
-                SoundEffectManager.playLeaveBase()
-                val targetBoardPos = path[0]
-
-                val homeSpot = BoardConfig.homePositions[colorOrdinal]?.getOrNull(token.id) ?: Pair(0, 0)
-                animateHopFrames(player.id, tokenId, homeSpot, targetBoardPos, frames = 8)
-
-                val updatedToken = token.copy(
-                    state = TokenState.ON_BOARD,
-                    positionIndex = 0,
-                    boardPosition = targetBoardPos
-                )
-                updateToken(playerIndex, tokenIndex, updatedToken)
-                delay(60)
-                handlePostMove(playerIndex, updatedToken)
-            } else {
-                var currentPos = token.positionIndex
-                for (step in 1..diceRoll) {
-                    val fromPos = path[currentPos]
-                    currentPos++
-                    val toPos = path[currentPos]
-
-                    SoundEffectManager.playTokenStep()
-                    animateHopFrames(player.id, tokenId, fromPos, toPos, frames = 8)
-
-                    val state = if (currentPos >= 51) TokenState.IN_HOME_COLUMN else TokenState.ON_BOARD
-                    val finalState = if (currentPos == 56) TokenState.FINISHED else state
-
-                    val updatedToken = token.copy(
-                        state = finalState,
-                        positionIndex = currentPos,
-                        boardPosition = toPos
-                    )
-                    updateToken(playerIndex, tokenIndex, updatedToken)
-                }
-
-                val finalToken = _state.value.players[playerIndex].tokens[tokenIndex]
-                handlePostMove(playerIndex, finalToken)
-            }
-        }
+        return MovePlan(s.currentPlayerIndex, token, roll)
     }
 
-    private suspend fun animateHopFrames(
-        playerId: Int,
-        tokenId: Int,
-        fromPos: Pair<Int, Int>,
-        toPos: Pair<Int, Int>,
-        frames: Int = 8
-    ) {
-        for (f in 1..frames) {
-            val progress = f.toFloat() / frames.toFloat()
-            _state.update {
-                it.copy(
-                    animatingPlayerId = playerId,
-                    animatingTokenId = tokenId,
-                    animatingFromPos = fromPos,
-                    animatingToPos = toPos,
-                    animatingHopProgress = progress
-                )
-            }
-            delay(16) // Smooth 60fps frame delta
+    private suspend fun runMove(plan: MovePlan) {
+        val moved = walkToken(plan)
+        resolveLanding(plan.playerIndex, moved, plan.roll)
+    }
+
+    private suspend fun walkToken(plan: MovePlan): Token {
+        val playerId = _state.value.players[plan.playerIndex].id
+        val path = PathMapper.getPlayerPath(playerId)
+        var current = plan.token
+
+        if (current.state == TokenState.IN_HOME) {
+            SoundEffectManager.playLeaveBase()
+            hop(playerId, current.id, BoardConfig.homeSpot(playerId, current.id), path[0], LEAVE_BASE_HOP_MS)
+            current = current.copy(state = TokenState.ON_BOARD, positionIndex = 0, boardPosition = path[0])
+            commitToken(plan.playerIndex, current)
+            return current
         }
-        _state.update {
-            it.copy(
-                animatingFromPos = null,
-                animatingToPos = null,
-                animatingHopProgress = 0f
+
+        repeat(plan.roll) {
+            val next = current.positionIndex + 1
+            SoundEffectManager.playTokenStep()
+            hop(playerId, current.id, path[current.positionIndex], path[next], STEP_HOP_MS)
+            current = current.copy(state = stateForIndex(next), positionIndex = next, boardPosition = path[next])
+            commitToken(plan.playerIndex, current)
+        }
+        return current
+    }
+
+    private suspend fun hop(playerId: Int, tokenId: Int, from: Pair<Int, Int>, to: Pair<Int, Int>, durationMs: Int) {
+        _state.update { it.copy(hop = HopMove(playerId, tokenId, from, to, durationMs, ++hopSeq)) }
+        delay(durationMs.toLong())
+    }
+
+    /** Writes the token and clears the hop in one emission so the UI never draws it twice. */
+    private fun commitToken(playerIndex: Int, token: Token) {
+        _state.update { s ->
+            s.copy(
+                hop = null,
+                players = s.players.mapIndexed { i, p ->
+                    if (i != playerIndex) p else p.copy(tokens = p.tokens.map { if (it.id == token.id) token else it })
+                }
             )
         }
     }
 
-    private fun updateToken(playerIndex: Int, tokenIndex: Int, token: Token) {
-        val players = _state.value.players.toMutableList()
-        val player = players.getOrNull(playerIndex) ?: return
-        val tokens = player.tokens.toMutableList()
-        if (tokenIndex !in tokens.indices) return
-        tokens[tokenIndex] = token
-
-        val hasFinished = tokens.all { it.state == TokenState.FINISHED }
-        players[playerIndex] = player.copy(tokens = tokens, hasFinished = hasFinished)
-        _state.update { it.copy(players = players) }
-    }
-
-    private suspend fun handlePostMove(playerIndex: Int, token: Token) {
-        val currentPlayer = _state.value.players.getOrNull(playerIndex) ?: return
-        var extraTurn = false
-        var captureMessage = ""
-
-        if (_state.value.diceResult?.value == 6) {
-            extraTurn = true
-        }
+    private suspend fun resolveLanding(playerIndex: Int, token: Token, roll: Int) {
+        val playerName = _state.value.players[playerIndex].name
+        var bonusTurn = roll == 6
+        var note = ""
 
         if (token.state == TokenState.FINISHED) {
-            extraTurn = true
-            captureMessage = " 🎉 ${currentPlayer.name} reached HOME!"
+            bonusTurn = true
+            note = " 🎉 A piece reached HOME!"
             SoundEffectManager.playSixRolled()
         }
 
-        // Capture check
-        if (token.state == TokenState.ON_BOARD && !BoardConfig.safePositions.contains(token.boardPosition)) {
-            val players = _state.value.players.toMutableList()
-            var captured = false
-
-            for (i in players.indices) {
-                if (i == playerIndex) continue
-                val opp = players[i]
-                val oppColorOrdinal = opp.color.ordinal
-                val oppTokens = opp.tokens.toMutableList()
-                var oppUpdated = false
-
-                for (j in oppTokens.indices) {
-                    val oppToken = oppTokens[j]
-                    if (oppToken.state == TokenState.ON_BOARD && oppToken.boardPosition == token.boardPosition) {
-                        AppLogger.i("GameEngine") { "${currentPlayer.name} captured ${opp.name}'s token ${oppToken.id} at ${token.boardPosition}" }
-                        SoundEffectManager.playCapture()
-                        val homeDest = BoardConfig.homePositions[oppColorOrdinal]?.getOrNull(oppToken.id) ?: Pair(0, 0)
-
-                        val captureEvent = CapturedTokenEvent(
-                            playerId = opp.id,
-                            tokenId = oppToken.id,
-                            fromPosition = oppToken.boardPosition ?: Pair(0, 0),
-                            toHomePosition = homeDest
-                        )
-                        _state.update { it.copy(lastCapturedEvent = captureEvent) }
-
-                        oppTokens[j] = oppToken.copy(
-                            state = TokenState.IN_HOME,
-                            positionIndex = -1,
-                            boardPosition = homeDest
-                        )
-                        captured = true
-                        oppUpdated = true
-                        extraTurn = true
-                    }
-                }
-                if (oppUpdated) {
-                    players[i] = opp.copy(tokens = oppTokens)
-                }
-            }
-
-            if (captured) {
-                captureMessage = " 💥 CAPTURED an opponent! Bonus turn!"
-                _state.update { it.copy(players = players) }
-                delay(450)
-            }
+        val cell = token.boardPosition
+        if (token.isOnMainTrack && cell != null && !BoardConfig.isSafe(cell) && captureAt(playerIndex, cell)) {
+            bonusTurn = true
+            note = " 💥 Captured an opponent!"
         }
 
-        _state.update {
-            it.copy(
-                animatingTokenId = null,
-                animatingPlayerId = null,
-                lastCapturedEvent = null
-            )
-        }
+        val finishedRank = markFinishedIfDone(playerIndex)
+        if (finishGameIfDecided()) return
 
-        checkWin()
-
-        if (_state.value.isGameOver) return
-
-        if (extraTurn) {
+        if (bonusTurn && finishedRank == null) {
             _state.update {
                 it.copy(
                     gamePhase = GamePhase.WAITING_FOR_ROLL,
                     validMoves = emptyList(),
                     diceResult = null,
-                    moveMessage = "${currentPlayer.name} gets a bonus turn!$captureMessage Roll corner dice 🎲"
+                    moveMessage = "$playerName gets a bonus turn!$note"
                 )
             }
-            checkAI()
+            continueTurn()
         } else {
-            nextTurn()
+            advanceTurn(prefix = finishedRank?.let { "🏅 $playerName finished #$it!" })
         }
     }
 
-    private fun nextTurn() {
-        val players = _state.value.players
-        if (players.isEmpty()) return
+    /** Sends every opponent token on [cell] back to base, animating each return. */
+    private suspend fun captureAt(capturerIndex: Int, cell: Pair<Int, Int>): Boolean {
+        val capturer = _state.value.players[capturerIndex]
+        val victims = _state.value.players.withIndex()
+            .filter { (i, _) -> i != capturerIndex }
+            .flatMap { (i, p) -> p.tokens.filter { it.isOnMainTrack && it.boardPosition == cell }.map { i to it } }
+        if (victims.isEmpty()) return false
 
-        var next = (_state.value.currentPlayerIndex + 1) % players.size
-        var loopCount = 0
-        while (players[next].hasFinished && loopCount < players.size) {
-            next = (next + 1) % players.size
-            loopCount++
+        SoundEffectManager.playCapture()
+        for ((victimIndex, victim) in victims) {
+            val owner = _state.value.players[victimIndex]
+            AppLogger.i(TAG) { "${capturer.name} captured ${owner.name}'s token ${victim.id} at $cell" }
+            val home = BoardConfig.homeSpot(owner.id, victim.id)
+            hop(owner.id, victim.id, cell, home, CAPTURE_HOP_MS)
+            commitToken(victimIndex, victim.copy(state = TokenState.IN_HOME, positionIndex = -1, boardPosition = home))
         }
+        return true
+    }
+
+    private fun stateForIndex(index: Int): TokenState = when {
+        index >= BoardConfig.GOAL_INDEX -> TokenState.FINISHED
+        index >= BoardConfig.HOME_COLUMN_START -> TokenState.IN_HOME_COLUMN
+        else -> TokenState.ON_BOARD
+    }
+
+    // endregion
+
+    // region Turn flow and results
+
+    /** Ranks the player if all their tokens are home; returns the new rank, or null. */
+    private fun markFinishedIfDone(playerIndex: Int): Int? {
+        val player = _state.value.players[playerIndex]
+        if (player.hasFinished || player.tokens.any { it.state != TokenState.FINISHED }) return null
+        val rank = _state.value.players.count { it.hasFinished } + 1
+        AppLogger.i(TAG) { "${player.name} finished in place $rank" }
+        _state.update { s ->
+            s.copy(players = s.players.mapIndexed { i, p -> if (i == playerIndex) p.copy(hasFinished = true, rank = rank) else p })
+        }
+        return rank
+    }
+
+    /**
+     * The match is decided when at most one player is still racing, or — in a game with humans —
+     * when every human has finished (bots racing each other would just be a wait).
+     */
+    private fun finishGameIfDecided(): Boolean {
+        val players = _state.value.players
+        val racing = players.filter { !it.hasFinished }
+        val humansInGame = players.any { !it.isAI }
+        val decided = racing.size <= 1 || (humansInGame && racing.none { !it.isAI })
+        if (!decided) return false
+
+        // Remaining players are ranked by how far their pieces have travelled.
+        var nextRank = players.count { it.hasFinished } + 1
+        val remainingRanks = racing
+            .sortedByDescending { p -> p.tokens.sumOf { it.positionIndex.coerceAtLeast(0) } }
+            .associate { it.id to nextRank++ }
+        val ranked = players.map { p -> remainingRanks[p.id]?.let { p.copy(rank = it) } ?: p }
+        val winner = ranked.first { it.rank == 1 }
+
+        AppLogger.i(TAG) { "🏆 Match won by ${winner.name} (id: ${winner.id})" }
+        SoundEffectManager.playWinFanfare()
+        _state.update {
+            it.copy(
+                players = ranked,
+                gamePhase = GamePhase.GAME_OVER,
+                isGameOver = true,
+                winnerId = winner.id,
+                validMoves = emptyList(),
+                hop = null,
+                moveMessage = "🏆 ${winner.name} WINS THE MATCH!"
+            )
+        }
+        return true
+    }
+
+    private fun advanceTurn(prefix: String? = null) {
+        val s = _state.value
+        val players = s.players
+        if (players.isEmpty() || s.isGameOver) return
+
+        val next = (1..players.size).map { (s.currentPlayerIndex + it) % players.size }
+            .firstOrNull { !players[it].hasFinished } ?: return
 
         val nextPlayer = players[next]
         _state.update {
@@ -409,44 +360,45 @@ class GameEngine {
                 validMoves = emptyList(),
                 consecutiveSixes = 0,
                 isDiceRollingForPlayer = null,
-                animatingTokenId = null,
-                animatingPlayerId = null,
-                isAutoMoving = false,
-                moveMessage = "${nextPlayer.name}'s turn! Roll your corner dice 🎲"
+                hop = null,
+                moveMessage = listOfNotNull(prefix, rollPrompt(nextPlayer)).joinToString(" ")
             )
         }
-        checkAI()
+        continueTurn()
     }
 
-    private fun checkWin() {
-        val players = _state.value.players
-        val winner = players.firstOrNull { it.hasFinished }
-        if (winner != null) {
-            AppLogger.i("GameEngine") { "🏆 Match won by ${winner.name} (id: ${winner.id})" }
-            SoundEffectManager.playWinFanfare()
-            _state.update {
-                it.copy(
-                    gamePhase = GamePhase.GAME_OVER,
-                    isGameOver = true,
-                    winnerId = winner.id,
-                    moveMessage = "🏆 ${winner.name} WINS THE MATCH!"
-                )
-            }
+    /** Kicks off the AI's roll when a bot is on turn; humans roll by tapping. */
+    private fun continueTurn() {
+        val s = _state.value
+        val player = s.currentPlayer ?: return
+        if (s.isGameOver || !player.isAI || s.gamePhase != GamePhase.WAITING_FOR_ROLL) return
+        launch {
+            delay(AI_ROLL_DELAY_MS)
+            beginRoll()?.let { finishRoll(it) }
         }
     }
 
-    private fun checkAI() {
-        val state = _state.value
-        if (state.isGameOver || state.players.isEmpty()) return
-        val player = state.players.getOrNull(state.currentPlayerIndex) ?: return
-        if (player.isAI && state.gamePhase == GamePhase.WAITING_FOR_ROLL) {
-            currentActionJob?.cancel()
-            currentActionJob = engineScope.launch {
-                aiPlayer?.executeRoll()
-            }
-        }
+    private fun launch(block: suspend CoroutineScope.() -> Unit) {
+        scope.launch(gameJob, block = block)
     }
 
-    fun getValidMoves(): List<Int> = _state.value.validMoves
+    private fun rollPrompt(player: Player) = "${player.name}'s turn! Roll your dice 🎲"
+
+    private fun PlayerColor.displayName() = name.lowercase().replaceFirstChar { it.uppercase() }
+
+    // endregion
+
+    companion object {
+        private const val TAG = "GameEngine"
+        private const val MAX_CONSECUTIVE_SIXES = 3
+
+        const val ROLL_MS = 480L
+        const val TURN_PAUSE_MS = 850L
+        const val AUTO_MOVE_MS = 250L
+        const val AI_THINK_MS = 450L
+        const val AI_ROLL_DELAY_MS = 550L
+        const val STEP_HOP_MS = 150
+        const val LEAVE_BASE_HOP_MS = 240
+        const val CAPTURE_HOP_MS = 380
+    }
 }
-

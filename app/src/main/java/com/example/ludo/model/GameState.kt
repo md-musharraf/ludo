@@ -1,11 +1,17 @@
 package com.example.ludo.model
 
-data class CapturedTokenEvent(
+/**
+ * A single on-board hop the UI should animate. The engine emits one per step and waits
+ * [durationMs] before committing the move, so the UI owns frame interpolation and the
+ * engine never pushes per-frame state.
+ */
+data class HopMove(
     val playerId: Int,
     val tokenId: Int,
-    val fromPosition: Pair<Int, Int>,
-    val toHomePosition: Pair<Int, Int>,
-    val timestamp: Long = System.currentTimeMillis()
+    val from: Pair<Int, Int>,
+    val to: Pair<Int, Int>,
+    val durationMs: Int,
+    val seq: Long
 )
 
 data class GameState(
@@ -19,19 +25,17 @@ data class GameState(
     val winnerId: Int? = null,
     val moveMessage: String = "",
     val isDiceRollingForPlayer: Int? = null,
-    val animatingTokenId: Int? = null,
-    val animatingPlayerId: Int? = null,
-    val animatingFromPos: Pair<Int, Int>? = null,
-    val animatingToPos: Pair<Int, Int>? = null,
-    val animatingHopProgress: Float = 0f,
-    val lastCapturedEvent: CapturedTokenEvent? = null,
-    val isAutoMoving: Boolean = false
-)
+    val hop: HopMove? = null
+) {
+    val currentPlayer: Player? get() = players.getOrNull(currentPlayerIndex)
+
+    /** Players ordered by finishing rank (winner first); unranked players are omitted. */
+    val standings: List<Player> get() = players.filter { it.rank > 0 }.sortedBy { it.rank }
+}
 
 enum class GamePhase {
     WAITING_FOR_ROLL,
     WAITING_FOR_MOVE,
     ANIMATING_MOVE,
-    AI_THINKING,
     GAME_OVER
 }

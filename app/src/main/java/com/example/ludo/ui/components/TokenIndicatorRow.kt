@@ -18,12 +18,13 @@ import com.example.ludo.model.Token
 import com.example.ludo.model.TokenState
 import com.example.ludo.theme.SafeZoneStar
 
+private val InBaseGrey = Color(0xFFCFD8DC)
+
 /**
- * Reusable token status indicator row.
- * Displays 4 status badges corresponding to each token:
- * - FINISHED: Filled with player color + star border.
- * - ON_BOARD / IN_HOME_COLUMN: White interior with thick player color border.
- * - IN_HOME: Neutral muted grey indicator.
+ * One status dot per token:
+ * - FINISHED: filled with the player colour.
+ * - ON_BOARD / IN_HOME_COLUMN: white with a thick player-colour ring.
+ * - IN_HOME: muted grey.
  */
 @Composable
 fun TokenIndicatorRow(
@@ -38,36 +39,19 @@ fun TokenIndicatorRow(
         horizontalArrangement = Arrangement.spacedBy(spacing),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        for (i in 0 until tokens.size) {
-            val token = tokens[i]
-            when (token.state) {
-                TokenState.FINISHED -> {
-                    Box(
-                        modifier = Modifier
-                            .size(dotSize)
-                            .clip(CircleShape)
-                            .background(playerColor)
-                            .border(1.dp, SafeZoneStar, CircleShape)
-                    )
-                }
-                TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> {
-                    Box(
-                        modifier = Modifier
-                            .size(dotSize)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .border(1.6.dp, playerColor, CircleShape)
-                    )
-                }
-                TokenState.IN_HOME -> {
-                    Box(
-                        modifier = Modifier
-                            .size(dotSize)
-                            .clip(CircleShape)
-                            .background(Color(0xFFCFD8DC))
-                    )
-                }
+        for (token in tokens) {
+            val (fill, ring, ringWidth) = when (token.state) {
+                TokenState.FINISHED -> Triple(playerColor, SafeZoneStar, 1.dp)
+                TokenState.ON_BOARD, TokenState.IN_HOME_COLUMN -> Triple(Color.White, playerColor, 1.6.dp)
+                TokenState.IN_HOME -> Triple(InBaseGrey, InBaseGrey, 0.dp)
             }
+            Box(
+                modifier = Modifier
+                    .size(dotSize)
+                    .clip(CircleShape)
+                    .background(fill)
+                    .border(ringWidth, ring, CircleShape)
+            )
         }
     }
 }

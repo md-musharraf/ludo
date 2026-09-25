@@ -1,90 +1,105 @@
 package com.example.ludo.engine
 
+import com.example.ludo.model.AiDifficulty
+import com.example.ludo.model.GameState
+import com.example.ludo.model.Player
 import com.example.ludo.model.TokenState
-import kotlinx.coroutines.delay
+import kotlin.random.Random
 
 /**
- * Intelligent AI opponent for Ludo.
- * Supports Easy (random choice) and Hard (heuristic scoring factoring in captures, home safety, token release, and advancement).
+ * Stateless AI move chooser. The engine owns timing; this only decides which token to move.
+ * - EASY: uniformly random among valid moves.
+ * - HARD: heuristic scoring of finishing, capturing, safety, threat avoidance and progress.
  */
-class AIPlayer(private val engine: GameEngine, private val difficulty: String) {
+class AIPlayer(
+    private val difficulty: AiDifficulty,
+    private val random: Random = Random.Default
+) {
 
-    suspend fun executeRoll() {
-        delay(550)
-        engine.rollDice()
-    }
-
-    suspend fun executeMove(validMoves: List<Int>) {
-        if (validMoves.isEmpty()) return
-        delay(500)
-        val chosenMove = chooseBestMove(validMoves)
-        engine.selectToken(chosenMove)
-    }
-
-    private fun chooseBestMove(validMoves: List<Int>): Int {
+    fun chooseMove(state: GameState, validMoves: List<Int>): Int? {
+        if (validMoves.isEmpty()) return null
         if (validMoves.size == 1) return validMoves.first()
-        if (difficulty == "Easy") {
-            return validMoves.random()
+        if (difficulty == AiDifficulty.EASY) return validMoves.random(random)
+
+        val player = state.currentPlayer ?: return validMoves.first()
+        val dice = state.diceResult?.value ?: return validMoves.first()
+        return validMoves.maxByOrNull { scoreMove(player, it, dice, state.players) } ?: validMoves.first()
+    }
+
+    private fun scoreMove(player: Player, tokenId: Int, dice: Int, players: List<Player>): Int {
+        val token = player.tokens.firstOrNull { it.id == tokenId } ?: return Int.MIN_VALUE
+        val path = PathMapper.getPlayerPath(player.color.ordinal)
+
+        if (token.state == TokenState.IN_HOME) {
+            // Deploying is strong, but less so once several tokens are already out.
+            val deployed = player.tokens.count { it.isOnMainTrack || it.state == TokenState.IN_HOME_COLUMN }
+            return DEPLOY - deployed * 15
         }
 
-        val state = engine.state.value
-        val currentPlayer = state.players.getOrNull(state.currentPlayerIndex) ?: return validMoves.first()
-        val diceVal = state.diceResult?.value ?: 1
-        val path = PathMapper.getPlayerPath(currentPlayer.id)
+        val target = token.positionIndex + dice
+        val targetCell = path.getOrNull(target) ?: return Int.MIN_VALUE
+        val onTrackAfter = target < BoardConfig.HOME_COLUMN_START
+        var score = target // Mild preference for the most advanced token
 
-        var bestScore = Int.MIN_VALUE
-        var bestTokenId = validMoves.first()
+        if (target == BoardConfig.GOAL_INDEX) score += FINISH
+        if (!onTrackAfter && token.positionIndex < BoardConfig.HOME_COLUMN_START) score += ENTER_HOME_COLUMN
 
-        for (tokenId in validMoves) {
-            val token = currentPlayer.tokens.firstOrNull { it.id == tokenId } ?: continue
-            var score = 0
-
-            if (token.state == TokenState.IN_HOME) {
-                score += 90 // High priority for deploying new token
+        if (onTrackAfter) {
+            val safe = BoardConfig.isSafe(targetCell)
+            if (safe) {
+                score += SAFE_LANDING
             } else {
-                val targetIndex = token.positionIndex + diceVal
-                if (targetIndex in path.indices) {
-                    val targetBoardPos = path[targetIndex]
-
-                    // Finishing token into center goal
-                    if (targetIndex == 56) {
-                        score += 350
-                    }
-
-                    // Entering safe home column
-                    if (targetIndex >= 51 && token.positionIndex < 51) {
-                        score += 100
-                    }
-
-                    // Capturing opponent
-                    if (!BoardConfig.safePositions.contains(targetBoardPos)) {
-                        for (otherPlayer in state.players) {
-                            if (otherPlayer.id == currentPlayer.id) continue
-                            for (oppToken in otherPlayer.tokens) {
-                                if (oppToken.state == TokenState.ON_BOARD && oppToken.boardPosition == targetBoardPos) {
-                                    score += 200 // Maximum offensive reward
-                                }
-                            }
+                // Capture: reward more for sending back a far-advanced opponent.
+                for (other in players) {
+                    if (other.id == player.id) continue
+                    for (victim in other.tokens) {
+                        if (victim.isOnMainTrack && victim.boardPosition == targetCell) {
+                            score += CAPTURE + victim.positionIndex * 2
                         }
                     }
-
-                    // Landing on safe zone
-                    if (BoardConfig.safePositions.contains(targetBoardPos)) {
-                        score += 50
-                    }
-
-                    // Forward progress bonus
-                    score += targetIndex * 2
                 }
-            }
-
-            if (score > bestScore) {
-                bestScore = score
-                bestTokenId = tokenId
+                if (player.tokens.any { it.id != tokenId && it.isOnMainTrack && it.boardPosition == targetCell }) {
+                    score += FORM_BLOCKADE
+                }
+                score -= threatsAt(targetCell, player, players) * THREAT_PENALTY
             }
         }
 
-        return bestTokenId
+        // Escaping from a currently threatened, unsafe cell is worth more the further the token has come.
+        if (token.isOnMainTrack && !BoardConfig.isSafe(token.boardPosition)) {
+            val threatenedNow = threatsAt(token.boardPosition!!, player, players) > 0
+            if (threatenedNow) score += ESCAPE + token.positionIndex
+        }
+        return score
+    }
+
+    companion object {
+        private const val DEPLOY = 90
+        private const val FINISH = 350
+        private const val ENTER_HOME_COLUMN = 120
+        private const val CAPTURE = 200
+        private const val SAFE_LANDING = 50
+        private const val FORM_BLOCKADE = 40
+        private const val THREAT_PENALTY = 60
+        private const val ESCAPE = 70
+
+        /** Number of opponent tokens that could land on [cell] with a single roll of 1..6. */
+        fun threatsAt(cell: Pair<Int, Int>, mover: Player, players: List<Player>): Int {
+            val cellIdx = BoardConfig.trackIndexOf(cell)
+            if (cellIdx < 0 || BoardConfig.isSafe(cell)) return 0
+            var threats = 0
+            for (other in players) {
+                if (other.id == mover.id) continue
+                for (t in other.tokens) {
+                    if (!t.isOnMainTrack) continue
+                    val oppIdx = BoardConfig.trackIndexOf(t.boardPosition)
+                    if (oppIdx < 0) continue
+                    val distance = (cellIdx - oppIdx + BoardConfig.TRACK_LENGTH) % BoardConfig.TRACK_LENGTH
+                    // Must be reachable before the opponent turns into its own home column.
+                    if (distance in 1..6 && t.positionIndex + distance < BoardConfig.HOME_COLUMN_START) threats++
+                }
+            }
+            return threats
+        }
     }
 }
-

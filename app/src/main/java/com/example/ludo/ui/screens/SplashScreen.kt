@@ -11,12 +11,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ludo.theme.*
@@ -28,7 +28,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
     val infiniteTransition = rememberInfiniteTransition(label = "splash")
 
-    val diceRotation by infiniteTransition.animateFloat(
+    val diceRotation = infiniteTransition.animateFloat(
         initialValue = -12f,
         targetValue = 12f,
         animationSpec = infiniteRepeatable(
@@ -38,7 +38,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
         label = "diceRotation"
     )
 
-    val diceScale by animateFloatAsState(
+    val diceScale = animateFloatAsState(
         targetValue = if (isStarted) 1f else 0.4f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -47,7 +47,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
         label = "diceScale"
     )
 
-    val titleScale by animateFloatAsState(
+    val titleScale = animateFloatAsState(
         targetValue = if (isStarted) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
@@ -58,22 +58,14 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 
     LaunchedEffect(Unit) {
         isStarted = true
-        delay(2400)
+        delay(1800)
         onSplashFinished()
     }
 
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFF8E1),
-                        Color(0xFFFFECB3),
-                        Color(0xFFFFE082)
-                    )
-                )
-            ),
+            .background(WarmBackgroundBrush),
         contentAlignment = Alignment.Center
     ) {
         val isCompact = maxHeight < 680.dp
@@ -93,8 +85,11 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(emblemSize)
-                    .scale(diceScale)
-                    .rotate(diceRotation)
+                    .graphicsLayer {
+                        scaleX = diceScale.value
+                        scaleY = diceScale.value
+                        rotationZ = diceRotation.value
+                    }
                     .shadow(16.dp, RoundedCornerShape(28.dp))
                     .clip(RoundedCornerShape(28.dp))
                     .background(Color.White)
@@ -126,7 +121,10 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
             Spacer(modifier = Modifier.height(verticalSpacer))
 
             Row(
-                modifier = Modifier.scale(titleScale),
+                modifier = Modifier.graphicsLayer {
+                    scaleX = titleScale.value
+                    scaleY = titleScale.value
+                },
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -142,7 +140,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
                 text = "SUPER LUDO MASTER",
                 fontSize = if (isCompact) 11.sp else 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF6D4C41),
+                color = TextBrown,
                 letterSpacing = if (isCompact) 2.5.sp else 3.sp
             )
         }
@@ -150,7 +148,7 @@ fun SplashScreen(onSplashFinished: () -> Unit) {
 }
 
 @Composable
-private fun SplashLetter(char: String, color: Color, size: androidx.compose.ui.unit.Dp = 56.dp, fontSize: androidx.compose.ui.unit.TextUnit = 32.sp) {
+private fun SplashLetter(char: String, color: Color, size: Dp = 56.dp, fontSize: TextUnit = 32.sp) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier

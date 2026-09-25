@@ -6,7 +6,10 @@ data class Token(
     val state: TokenState = TokenState.IN_HOME,
     val positionIndex: Int = -1, // -1 when in home, 0-56 on board/home column
     val boardPosition: Pair<Int, Int>? = null // (row, col) on 15x15 grid
-)
+) {
+    /** True while the token sits on the shared 52-cell loop, where it can capture and be captured. */
+    val isOnMainTrack: Boolean get() = state == TokenState.ON_BOARD
+}
 
 enum class TokenState {
     IN_HOME,

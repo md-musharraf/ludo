@@ -10,49 +10,44 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.ludo.core.util.PlayerColorUtils
 import com.example.ludo.model.Player
+import com.example.ludo.theme.TextDark
+import com.example.ludo.theme.TextMuted
 
 @Composable
 fun WinDialog(
-    winner: Player?,
+    standings: List<Player>,
     onPlayAgain: () -> Unit,
     onHome: () -> Unit
 ) {
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "dialogScale"
-    )
-
-    val infiniteTransition = rememberInfiniteTransition(label = "trophy")
-    val trophyScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.15f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(600),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "trophyPulse"
-    )
-
+    val winner = standings.firstOrNull()
+    val appear = remember { Animatable(0.6f) }
+    LaunchedEffect(Unit) {
+        appear.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+    }
+    val trophyScale = rememberPulse(active = true, from = 1f, to = 1.15f, durationMs = 600)
     val winnerColor = PlayerColorUtils.getComposeColor(winner?.color)
 
-    Dialog(onDismissRequest = { }) {
+    Dialog(
+        onDismissRequest = { },
+        properties = DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false)
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .scale(scale),
+                .graphicsLayer {
+                    scaleX = appear.value
+                    scaleY = appear.value
+                },
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = Color.White),
             elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
@@ -65,18 +60,16 @@ fun WinDialog(
             ) {
                 Text(
                     text = "🏆",
-                    fontSize = 72.sp,
-                    modifier = Modifier.scale(trophyScale)
+                    fontSize = 64.sp,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = trophyScale.value
+                        scaleY = trophyScale.value
+                    }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                Text(
-                    text = "GAME OVER!",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Black,
-                    color = Color(0xFF3E2723)
-                )
+                Text(text = "GAME OVER!", fontSize = 26.sp, fontWeight = FontWeight.Black, color = TextDark)
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -96,7 +89,21 @@ fun WinDialog(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                if (standings.size > 1) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        for (player in standings.drop(1)) {
+                            Text(
+                                text = "${rankLabel(player.rank)}  ${player.name}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = PlayerColorUtils.getComposeColor(player.color)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(22.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -107,7 +114,7 @@ fun WinDialog(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Home", fontWeight = FontWeight.Medium, color = Color(0xFF757575))
+                        Text("Home", fontWeight = FontWeight.Medium, color = TextMuted)
                     }
 
                     Button(

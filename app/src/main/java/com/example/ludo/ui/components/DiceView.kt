@@ -12,103 +12,77 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.ludo.theme.*
 import kotlinx.coroutines.delay
 
+private val CupShape = RoundedCornerShape(14.dp)
+private val WellShape = RoundedCornerShape(10.dp)
+private val DieShape = RoundedCornerShape(8.dp)
+
+private val CupBrush = Brush.verticalGradient(listOf(Color(0xFF5D4037), Color(0xFF3E2723), Color(0xFF271510)))
+private val WellBrush = Brush.radialGradient(listOf(Color(0xFF2C241E), Color(0xFF1E1814), Color(0xFF120E0C)))
+private val DieBrush = Brush.linearGradient(
+    colors = listOf(Color.White, Color(0xFFFCFAF7), Color(0xFFF4EFE6), Color(0xFFE8E0D2)),
+    start = Offset.Zero,
+    end = Offset(100f, 100f)
+)
+
+/** Pip cells (0..8 on a 3x3 grid, row-major) for faces 1..6. */
+private val PipLayouts = arrayOf(
+    intArrayOf(4),
+    intArrayOf(2, 6),
+    intArrayOf(2, 4, 6),
+    intArrayOf(0, 2, 6, 8),
+    intArrayOf(0, 2, 4, 6, 8),
+    intArrayOf(0, 2, 3, 5, 6, 8)
+)
+
 /**
- * Mobile-Optimized Classic Physical Dice Cup & 3D Ivory Dice Component.
- * - Hardware-accelerated GPU graphicsLayer transforms.
- * - Guarded animations: 0% CPU overhead when inactive or waiting.
- * - Single-pass pip rendering.
+ * Dice cup with a 3D ivory die. All animated values are read in draw/layer lambdas, so rolling
+ * and glowing never recompose, and every animation is idle unless it is needed.
  */
 @Composable
 fun DiceView(
     diceValue: Int,
     isRolling: Boolean,
     enabled: Boolean,
-    playerColor: Color = LudoGreen,
-    size: Dp = 52.dp,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    playerColor: Color = LudoGreen,
+    size: Dp = 52.dp
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "diceAnim")
-
-    // Animate rotation & tilt ONLY when actively rolling
-    val cupTilt by if (isRolling) {
-        infiniteTransition.animateFloat(
-            initialValue = -12f,
-            targetValue = 12f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(80, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "cupTilt"
-        )
-    } else {
-        remember { mutableFloatStateOf(0f) }
-    }
-
-    val rollingRotation by if (isRolling) {
-        infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 720f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(450, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "rollingRotation"
-        )
-    } else {
-        remember { mutableFloatStateOf(0f) }
-    }
-
-    val rollingScale by if (isRolling) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.92f,
-            targetValue = 1.08f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(120, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "rollingScale"
-        )
-    } else {
-        remember { mutableFloatStateOf(1f) }
-    }
-
-    // Breathing glow ONLY when enabled for active player
-    val glowAlpha by if (enabled) {
-        infiniteTransition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(750, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "glowAlpha"
-        )
-    } else {
-        remember { mutableFloatStateOf(0.4f) }
-    }
+    val cupTilt = rememberPulse(active = isRolling, from = -12f, to = 12f, durationMs = 80, idle = 0f)
+    val spin = rememberPulse(
+        active = isRolling, from = 0f, to = 720f, durationMs = 450,
+        easing = LinearEasing, repeatMode = RepeatMode.Restart
+    )
+    val shake = rememberPulse(active = isRolling, from = 0.92f, to = 1.08f, durationMs = 120, idle = 1f)
+    val glow = rememberPulse(active = enabled && !isRolling, from = 0.4f, to = 1f, durationMs = 750)
 
     // Spring-damped landing bounce when roll finishes
-    val landingScale by animateFloatAsState(
-        targetValue = if (isRolling) 1f else if (enabled) 1.04f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
+    val landingScale = animateFloatAsState(
+        targetValue = if (!isRolling && enabled) 1.04f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
         label = "landingScale"
     )
 
-    var displayedNumber by remember { mutableIntStateOf(diceValue) }
+    var displayedNumber by remember { mutableIntStateOf(diceValue.coerceIn(1, 6)) }
     LaunchedEffect(isRolling, diceValue) {
         if (isRolling) {
             while (true) {
@@ -116,168 +90,92 @@ fun DiceView(
                 delay(45)
             }
         } else {
-            displayedNumber = diceValue
+            displayedNumber = diceValue.coerceIn(1, 6)
         }
     }
 
+    val haptics = LocalHapticFeedback.current
+    val borderWidth = if (enabled) 2.2.dp else 1.2.dp
+
     Box(
-        modifier = modifier.size(size),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(size)
+            .semantics { contentDescription = "Dice showing $diceValue" }
+            .graphicsLayer {
+                rotationZ = cupTilt.value
+                val scale = shake.value * landingScale.value
+                scaleX = scale
+                scaleY = scale
+            }
+            .shadow(
+                elevation = if (enabled) 8.dp else 2.dp,
+                shape = CupShape,
+                ambientColor = if (enabled) playerColor.copy(alpha = 0.5f) else Color(0x33000000),
+                spotColor = if (enabled) playerColor else Color(0x44000000)
+            )
+            .clip(CupShape)
+            .background(CupBrush)
+            .drawWithContent {
+                drawContent()
+                val stroke = borderWidth.toPx()
+                drawRoundRect(
+                    color = if (enabled) playerColor.copy(alpha = glow.value) else Color(0xFF8D6E63),
+                    topLeft = Offset(stroke / 2, stroke / 2),
+                    size = Size(this.size.width - stroke, this.size.height - stroke),
+                    cornerRadius = CornerRadius(14.dp.toPx()),
+                    style = Stroke(width = stroke)
+                )
+            }
+            .clickable(
+                enabled = enabled && !isRolling,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Button,
+                onClickLabel = "Roll dice"
+            ) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
+            .padding(3.dp)
     ) {
-        // Classic Leather/Wood Shaker Cup & 3D Dice Container
+        // Inner felt well
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    rotationZ = if (isRolling) cupTilt else 0f
-                    scaleX = if (isRolling) rollingScale * landingScale else landingScale
-                    scaleY = if (isRolling) rollingScale * landingScale else landingScale
-                }
-                .shadow(
-                    elevation = if (enabled) 8.dp else 2.dp,
-                    shape = RoundedCornerShape(14.dp),
-                    ambientColor = if (enabled) playerColor.copy(alpha = 0.5f) else Color(0x33000000),
-                    spotColor = if (enabled) playerColor else Color(0x44000000)
-                )
-                .clip(RoundedCornerShape(14.dp))
-                // Outer Mahogany Cup Body
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF5D4037),
-                            Color(0xFF3E2723),
-                            Color(0xFF271510)
-                        )
-                    )
-                )
-                // Brass/Gold Outer Rim Frame
-                .border(
-                    width = if (enabled) 2.2.dp else 1.2.dp,
-                    color = if (enabled) playerColor.copy(alpha = glowAlpha) else Color(0xFF8D6E63),
-                    shape = RoundedCornerShape(14.dp)
-                )
-                .clickable(
-                    enabled = enabled && !isRolling,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onClick
-                )
-                .padding(3.dp)
+                .clip(WellShape)
+                .background(WellBrush)
+                .border(1.dp, Color(0xFF3E2723), WellShape)
         ) {
-            // Inner Cup Felt Well
+            val dieSize = size * 0.72f
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF2C241E),
-                                Color(0xFF1E1814),
-                                Color(0xFF120E0C)
-                            )
-                        )
-                    )
-                    .border(1.dp, Color(0xFF3E2723), RoundedCornerShape(10.dp))
+                    .size(dieSize)
+                    .graphicsLayer { rotationZ = spin.value }
+                    .shadow(elevation = 4.dp, shape = DieShape, ambientColor = Color(0x88000000), spotColor = Color.Black)
+                    .clip(DieShape)
+                    .background(DieBrush)
+                    .border(1.2.dp, Color(0xFFD7CCC8), DieShape)
             ) {
-                // 3D Ivory Porcelain Dice
-                val diceBoxSize = size * 0.72f
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .size(diceBoxSize)
-                        .graphicsLayer {
-                            rotationZ = if (isRolling) rollingRotation else 0f
-                        }
-                        .shadow(
-                            elevation = 4.dp,
-                            shape = RoundedCornerShape(8.dp),
-                            ambientColor = Color(0x88000000),
-                            spotColor = Color.Black
+                Canvas(modifier = Modifier.size(dieSize * 0.78f)) {
+                    val w = this.size.width
+                    val dotRadius = w * 0.11f
+                    val margin = w * 0.22f
+                    val step = w / 2 - margin
+                    val face = displayedNumber
+                    val pipColor = if (face == 1 || face == 6) LudoRed else Color(0xFF1E1E1E)
+
+                    for (cell in PipLayouts[face - 1]) {
+                        val pos = Offset(margin + (cell % 3) * step, margin + (cell / 3) * step)
+                        drawCircle(Color(0x33000000), dotRadius * 1.15f, Offset(pos.x + 0.8f, pos.y + 0.8f))
+                        drawCircle(pipColor, dotRadius, pos)
+                        drawCircle(
+                            Color.White.copy(alpha = 0.65f),
+                            dotRadius * 0.35f,
+                            Offset(pos.x - dotRadius * 0.25f, pos.y - dotRadius * 0.25f)
                         )
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color.White,
-                                    Color(0xFFFCFAF7),
-                                    Color(0xFFF4EFE6),
-                                    Color(0xFFE8E0D2)
-                                ),
-                                start = Offset(0f, 0f),
-                                end = Offset(100f, 100f)
-                            )
-                        )
-                        .border(1.2.dp, Color(0xFFD7CCC8), RoundedCornerShape(8.dp))
-                ) {
-                    // Realistic Indented Pips Canvas
-                    Canvas(modifier = Modifier.size(diceBoxSize * 0.78f)) {
-                        val dotRadius = this.size.width * 0.11f
-                        val margin = this.size.width * 0.22f
-                        val center = Offset(this.size.width / 2, this.size.height / 2)
-                        val topLeft = Offset(margin, margin)
-                        val topRight = Offset(this.size.width - margin, margin)
-                        val midLeft = Offset(margin, this.size.height / 2)
-                        val midRight = Offset(this.size.width - margin, this.size.height / 2)
-                        val bottomLeft = Offset(margin, this.size.height - margin)
-                        val bottomRight = Offset(this.size.width - margin, this.size.height - margin)
-
-                        val isRedFace = displayedNumber == 1 || displayedNumber == 6
-                        val pipColor = if (isRedFace) LudoRed else Color(0xFF1E1E1E)
-
-                        fun drawPip(pos: Offset) {
-                            drawCircle(
-                                color = Color(0x33000000),
-                                radius = dotRadius * 1.15f,
-                                center = Offset(pos.x + 0.8f, pos.y + 0.8f)
-                            )
-                            drawCircle(
-                                color = pipColor,
-                                radius = dotRadius,
-                                center = pos
-                            )
-                            drawCircle(
-                                color = Color.White.copy(alpha = 0.65f),
-                                radius = dotRadius * 0.35f,
-                                center = Offset(pos.x - dotRadius * 0.25f, pos.y - dotRadius * 0.25f)
-                            )
-                        }
-
-                        when (displayedNumber) {
-                            1 -> drawPip(center)
-                            2 -> {
-                                drawPip(topRight)
-                                drawPip(bottomLeft)
-                            }
-                            3 -> {
-                                drawPip(topRight)
-                                drawPip(center)
-                                drawPip(bottomLeft)
-                            }
-                            4 -> {
-                                drawPip(topLeft)
-                                drawPip(topRight)
-                                drawPip(bottomLeft)
-                                drawPip(bottomRight)
-                            }
-                            5 -> {
-                                drawPip(topLeft)
-                                drawPip(topRight)
-                                drawPip(center)
-                                drawPip(bottomLeft)
-                                drawPip(bottomRight)
-                            }
-                            6 -> {
-                                drawPip(topLeft)
-                                drawPip(topRight)
-                                drawPip(midLeft)
-                                drawPip(midRight)
-                                drawPip(bottomLeft)
-                                drawPip(bottomRight)
-                            }
-                        }
                     }
                 }
             }

@@ -4,10 +4,7 @@ import androidx.compose.ui.graphics.Color
 import com.example.ludo.model.PlayerColor
 import com.example.ludo.theme.*
 
-/**
- * Static Color Schemes for 3D Photorealistic Pawns.
- * Pre-allocated to guarantee zero allocation overhead during 60-120fps render loops.
- */
+/** Shading ramp for the 3D pawns, allocated once per colour. */
 data class PawnColorScheme(
     val highlightColor: Color,
     val lightColor: Color,
@@ -50,34 +47,14 @@ object PlayerColorUtils {
         deepShadow = Color(0xFF00153B)
     )
 
-    private val pawnSchemesMap = mapOf(
-        PlayerColor.RED to RedPawnScheme,
-        PlayerColor.GREEN to GreenPawnScheme,
-        PlayerColor.YELLOW to YellowPawnScheme,
-        PlayerColor.BLUE to BluePawnScheme
-    )
+    // Indexed by PlayerColor.ordinal for allocation-free lookups in draw loops.
+    private val pawnSchemes = arrayOf(RedPawnScheme, GreenPawnScheme, YellowPawnScheme, BluePawnScheme)
+    private val composeColors = arrayOf(LudoRed, LudoGreen, LudoYellow, LudoBlue)
+    private val lightColors = arrayOf(LudoRedLight, LudoGreenLight, LudoYellowLight, LudoBlueLight)
 
-    fun getPawnColorScheme(color: PlayerColor): PawnColorScheme {
-        return pawnSchemesMap[color] ?: RedPawnScheme
-    }
+    fun getPawnColorScheme(color: PlayerColor): PawnColorScheme = pawnSchemes[color.ordinal]
 
-    fun getComposeColor(color: PlayerColor?): Color {
-        return when (color) {
-            PlayerColor.RED -> LudoRed
-            PlayerColor.GREEN -> LudoGreen
-            PlayerColor.YELLOW -> LudoYellow
-            PlayerColor.BLUE -> LudoBlue
-            null -> LudoGreen
-        }
-    }
+    fun getComposeColor(color: PlayerColor?): Color = color?.let { composeColors[it.ordinal] } ?: LudoGreen
 
-    fun getLightColor(color: PlayerColor?): Color {
-        return when (color) {
-            PlayerColor.RED -> LudoRedLight
-            PlayerColor.GREEN -> LudoGreenLight
-            PlayerColor.YELLOW -> LudoYellowLight
-            PlayerColor.BLUE -> LudoBlueLight
-            null -> LudoGreenLight
-        }
-    }
+    fun getLightColor(color: PlayerColor?): Color = color?.let { lightColors[it.ordinal] } ?: LudoGreenLight
 }

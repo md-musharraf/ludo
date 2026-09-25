@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.example.ludo.model.AiDifficulty
 import com.example.ludo.ui.screens.GameScreen
 import com.example.ludo.ui.screens.HomeScreen
 import com.example.ludo.ui.screens.SplashScreen
@@ -19,8 +20,8 @@ fun MainNavigation() {
     NavHost(
         navController = navController,
         startDestination = Splash,
-        enterTransition = { fadeIn(animationSpec = tween(500)) },
-        exitTransition = { fadeOut(animationSpec = tween(500)) }
+        enterTransition = { fadeIn(animationSpec = tween(350)) },
+        exitTransition = { fadeOut(animationSpec = tween(350)) }
     ) {
         composable<Splash> {
             SplashScreen(onSplashFinished = {
@@ -31,18 +32,22 @@ fun MainNavigation() {
         }
         composable<Home> {
             HomeScreen(onStartGame = { playerCount, isVsAI, aiDifficulty ->
-                navController.navigate(Game(playerCount, isVsAI, aiDifficulty))
+                // Single-top guards against a double tap stacking two matches.
+                navController.navigate(Game(playerCount, isVsAI, aiDifficulty.name)) {
+                    launchSingleTop = true
+                }
             })
         }
         composable<Game> { backStackEntry ->
-            val gameParams = backStackEntry.toRoute<Game>()
+            // Route arguments are untrusted input (deep links, restored state): sanitize them.
+            val params = backStackEntry.toRoute<Game>()
             GameScreen(
-                playerCount = gameParams.playerCount,
-                isVsAI = gameParams.isVsAI,
-                aiDifficulty = gameParams.aiDifficulty,
+                playerCount = params.playerCount.coerceIn(2, 4),
+                isVsAI = params.isVsAI,
+                aiDifficulty = AiDifficulty.fromName(params.aiDifficulty),
                 onNavigateHome = {
-                    navController.navigate(Home) {
-                        popUpTo(Home) { inclusive = true }
+                    if (!navController.popBackStack(Home, inclusive = false)) {
+                        navController.navigate(Home) { popUpTo(0) }
                     }
                 }
             )

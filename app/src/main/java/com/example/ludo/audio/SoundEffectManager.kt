@@ -19,20 +19,22 @@ import kotlin.math.sin
  */
 object SoundEffectManager {
     private val engineScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    /** Read from the audio thread and written from the UI thread. */
+    @Volatile
     var isSoundEnabled: Boolean = true
 
     private const val SAMPLE_RATE = 44100
 
-    enum class SoundType {
-        DICE_ROLL,
-        TOKEN_STEP,
-        LEAVE_BASE,
-        SIX_ROLLED,
-        CAPTURE,
-        LADDER_CLIMB,
-        SNAKE_SLIDE,
-        WIN_FANFARE,
-        BUTTON_TAP
+    /** Every sound and the synthesizer that renders it; the single source of truth for both. */
+    private enum class SoundType(val generate: () -> ShortArray) {
+        DICE_ROLL(::generateDiceRollPcm),
+        TOKEN_STEP(::generateTokenStepPcm),
+        LEAVE_BASE(::generateLeaveBasePcm),
+        SIX_ROLLED(::generateSixRolledPcm),
+        CAPTURE(::generateCapturePcm),
+        WIN_FANFARE(::generateWinFanfarePcm),
+        BUTTON_TAP(::generateButtonTapPcm)
     }
 
     // Cached pre-generated PCM waveforms
@@ -43,47 +45,18 @@ object SoundEffectManager {
     init {
         engineScope.launch {
             try {
-                pregenerateAllSounds()
+                SoundType.entries.forEach { pcmFor(it) }
             } catch (e: Exception) {
                 AppLogger.w("SoundEffectManager", e) { "Failed to pregenerate sound buffers: ${e.message}" }
             }
         }
     }
 
-    private fun pregenerateAllSounds() {
-        AppLogger.d("SoundEffectManager") { "Pregenerating audio PCM buffers..." }
-        pcmCache[SoundType.DICE_ROLL] = generateDiceRollPcm()
-        pcmCache[SoundType.TOKEN_STEP] = generateTokenStepPcm()
-        pcmCache[SoundType.LEAVE_BASE] = generateLeaveBasePcm()
-        pcmCache[SoundType.SIX_ROLLED] = generateSixRolledPcm()
-        pcmCache[SoundType.CAPTURE] = generateCapturePcm()
-        pcmCache[SoundType.LADDER_CLIMB] = generateLadderClimbPcm()
-        pcmCache[SoundType.SNAKE_SLIDE] = generateSnakeSlidePcm()
-        pcmCache[SoundType.WIN_FANFARE] = generateWinFanfarePcm()
-        pcmCache[SoundType.BUTTON_TAP] = generateButtonTapPcm()
-    }
+    private fun pcmFor(type: SoundType): ShortArray = pcmCache.getOrPut(type) { type.generate() }
 
     private fun getOrCreateTrack(type: SoundType): AudioTrack? {
-        val cachedTrack = trackCache[type]
-        if (cachedTrack != null && cachedTrack.state == AudioTrack.STATE_INITIALIZED) {
-            return cachedTrack
-        }
-
-        var samples = pcmCache[type]
-        if (samples == null) {
-            samples = when (type) {
-                SoundType.DICE_ROLL -> generateDiceRollPcm()
-                SoundType.TOKEN_STEP -> generateTokenStepPcm()
-                SoundType.LEAVE_BASE -> generateLeaveBasePcm()
-                SoundType.SIX_ROLLED -> generateSixRolledPcm()
-                SoundType.CAPTURE -> generateCapturePcm()
-                SoundType.LADDER_CLIMB -> generateLadderClimbPcm()
-                SoundType.SNAKE_SLIDE -> generateSnakeSlidePcm()
-                SoundType.WIN_FANFARE -> generateWinFanfarePcm()
-                SoundType.BUTTON_TAP -> generateButtonTapPcm()
-            }
-            pcmCache[type] = samples
-        }
+        trackCache[type]?.takeIf { it.state == AudioTrack.STATE_INITIALIZED }?.let { return it }
+        val samples = pcmFor(type)
 
         return try {
             val audioTrack = AudioTrack.Builder()
@@ -105,10 +78,10 @@ object SoundEffectManager {
                 .build()
 
             audioTrack.write(samples, 0, samples.size)
-            trackCache[type] = audioTrack
+            trackCache.put(type, audioTrack)?.release() // Drop a stale track if another thread raced us
             audioTrack
         } catch (e: Exception) {
-            AppLogger.w("SoundEffectManager", { "Failed to build AudioTrack for $type: ${e.message}" })
+            AppLogger.w("SoundEffectManager") { "Failed to build AudioTrack for $type: ${e.message}" }
             null
         }
     }
@@ -136,8 +109,6 @@ object SoundEffectManager {
     fun playLeaveBase() = play(SoundType.LEAVE_BASE)
     fun playSixRolled() = play(SoundType.SIX_ROLLED)
     fun playCapture() = play(SoundType.CAPTURE)
-    fun playLadderClimb() = play(SoundType.LADDER_CLIMB)
-    fun playSnakeSlide() = play(SoundType.SNAKE_SLIDE)
     fun playWinFanfare() = play(SoundType.WIN_FANFARE)
     fun playButtonTap() = play(SoundType.BUTTON_TAP)
 
@@ -230,38 +201,6 @@ object SoundEffectManager {
             val envelope = (1.0 - t / 0.45).coerceIn(0.0, 1.0)
             val wave = sin(2.0 * Math.PI * freq * t) + noise
             samples[i] = (wave * 0.85 * envelope * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
-        }
-        return samples
-    }
-
-    private fun generateLadderClimbPcm(): ShortArray {
-        val durationMs = 500
-        val totalSamples = SAMPLE_RATE * durationMs / 1000
-        val samples = ShortArray(totalSamples)
-        val freqs = doubleArrayOf(523.25, 659.25, 783.99, 1046.50)
-        for (i in 0 until totalSamples) {
-            val t = i.toDouble() / SAMPLE_RATE
-            val noteIndex = (t / 0.12).toInt().coerceIn(0, 3)
-            val freq = freqs[noteIndex]
-            val localT = t - noteIndex * 0.12
-            val envelope = (1.0 - localT / 0.15).coerceIn(0.0, 1.0)
-            val wave = sin(2.0 * Math.PI * freq * t) + 0.3 * sin(2.0 * Math.PI * freq * 2.0 * t)
-            samples[i] = (wave * 0.75 * envelope * Short.MAX_VALUE).toInt().toShort()
-        }
-        return samples
-    }
-
-    private fun generateSnakeSlidePcm(): ShortArray {
-        val durationMs = 550
-        val totalSamples = SAMPLE_RATE * durationMs / 1000
-        val samples = ShortArray(totalSamples)
-        for (i in 0 until totalSamples) {
-            val t = i.toDouble() / SAMPLE_RATE
-            val progress = t / (durationMs / 1000.0)
-            val freq = 880.0 * (1.0 - progress * 0.7) + 100.0 * sin(2.0 * Math.PI * 25.0 * t)
-            val envelope = (1.0 - progress * 0.5).coerceIn(0.0, 1.0)
-            val wave = sin(2.0 * Math.PI * freq * t) + 0.2 * (Math.random() * 2.0 - 1.0)
-            samples[i] = (wave * 0.7 * envelope * Short.MAX_VALUE).toInt().coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
         return samples
     }
