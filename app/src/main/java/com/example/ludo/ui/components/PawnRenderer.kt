@@ -20,7 +20,7 @@ private val PinShade = Color(0xFFAEB7C2)
 private val PinOutline = Color(0xFF56606C)
 
 // Pin geometry, in multiples of the radius r (y grows downward from the anchor).
-private const val GROUND = 0.3f         // Base top face centre, below the anchor
+internal const val PAWN_GROUND = 0.3f   // Base top face centre, below the anchor
 private const val BASE_W = 1.24f        // Base disc width
 private const val BASE_H = 0.42f        // Base disc top-face height (perspective ellipse)
 private const val BASE_THICK = 0.14f    // Visible side of the base disc
@@ -28,8 +28,8 @@ private const val PIN_HEIGHT = 1.36f    // Tip to head centre
 private const val HEAD_R = 0.56f        // Head radius
 
 /** Extent above the anchor (head top) and below it (base underside), in multiples of r. */
-internal const val PAWN_TOP = PIN_HEIGHT + HEAD_R - GROUND + 0.04f
-internal const val PAWN_BOTTOM = GROUND + BASE_H / 2 + BASE_THICK + 0.04f
+internal const val PAWN_TOP = PIN_HEIGHT + HEAD_R - PAWN_GROUND + 0.04f
+internal const val PAWN_BOTTOM = PAWN_GROUND + BASE_H / 2 + BASE_THICK + 0.04f
 
 /** Vertical distance from a goti's anchor to its visual middle; add it to centre a goti in a box. */
 internal fun pawnVisualCenterOffset(radius: Float) = radius * (PAWN_TOP - PAWN_BOTTOM) / 2
@@ -55,7 +55,7 @@ internal fun DrawScope.drawPawn(
     val c = PlayerColorUtils.getPawnColorScheme(color)
     val r = radius
     val cx = center.x
-    val floorY = center.y + r * GROUND                 // Where the base rests on the board
+    val floorY = center.y + r * PAWN_GROUND                 // Where the base rests on the board
     val liftAmount = (lift / (r * 2.2f)).coerceIn(0f, 1f)
     val stretchY = 1f - 0.14f * squash
     val stretchX = 1f + 0.08f * squash

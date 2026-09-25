@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -62,6 +63,7 @@ fun LudoBoard(
     LaunchedEffect(Unit) { intro.animateTo(1f, tween(INTRO_MS, easing = LinearEasing)) }
 
     val spots = remember(gameState) { layoutPawns(gameState) }
+    val occupiedStars = remember(gameState) { occupiedStarCells(gameState) }
 
     val hop = gameState.hop
     // Keyed on seq so a new hop starts at 0 in the same frame it appears (no one-frame jump).
@@ -126,6 +128,8 @@ fun LudoBoard(
         ) {
             val g = BoardGeometry(size)
             currentPlayer?.let { drawTurnMarker(g, it.color, breathe) }
+
+            for (cell in occupiedStars) drawStarPlatform(g, cell)
 
             val introValue = intro.value
             val landingValue = landing.value
@@ -296,6 +300,16 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
     return spots
 }
 
+/** Star squares that currently have a goti standing on them (a hopping goti doesn't count yet). */
+private fun occupiedStarCells(state: GameState): List<Pair<Int, Int>> {
+    val hop = state.hop
+    return state.players.flatMap { p ->
+        p.tokens.filter { t ->
+            t.isOnMainTrack && BoardConfig.isStar(t.boardPosition) && !(hop != null && hop.playerId == p.id && hop.tokenId == t.id)
+        }.mapNotNull { it.boardPosition }
+    }.distinct()
+}
+
 /**
  * Offset (cell units) and radius for the [index]-th of [count] gotis sharing a cell. Front-row
  * gotis rest on the square's floor (dy = 0); back-row ones stand a little further up.
@@ -376,6 +390,10 @@ private fun DrawScope.drawTurnMarker(g: BoardGeometry, color: PlayerColor, stren
 
 /** Expanding ring plus radiating sparks; gold sparks mark a goti reaching home. */
 private fun DrawScope.drawEffect(g: BoardGeometry, effect: BoardEffect, p: Float) {
+    if (effect.kind == BoardEffect.Kind.SAFE) {
+        drawSafeBurst(g, effect.cell, p)
+        return
+    }
     val color = PlayerColorUtils.getComposeColor(effect.color)
     val isFinish = effect.kind == BoardEffect.Kind.FINISH
     val center = if (isFinish) {
@@ -403,10 +421,80 @@ private fun DrawScope.drawEffect(g: BoardGeometry, effect: BoardEffect, p: Float
 
 // endregion
 
+// Main-thread-only scratch path shared by star drawing on both layers.
+private val sharedStarPath = Path()
+
+private val StarGoldLight = Color(0xFFFFE58A)
+private val StarGold = Color(0xFFF5C518)
+private val StarGoldDark = Color(0xFFB8860B)
+
+/** Floor point (cell units, from the square's centre) where a lone goti's base rests. */
+private val STAR_FLOOR_Y = 0.5f - BASE_MARGIN - (PAWN_BOTTOM - PAWN_GROUND) * TRACK_PAWN_RADIUS
+
+/**
+ * Safe-square look for an occupied star: the board's grey star is covered, a large gold star
+ * lies flat under the goti's base, and a soft golden aura glows behind the goti like a shield.
+ */
+private fun DrawScope.drawStarPlatform(g: BoardGeometry, cell: Pair<Int, Int>) {
+    // Cover the static grey star so only the gold one shows.
+    val inset = 1.5.dp.toPx()
+    drawRect(Color.White, g.point(cell.second.toFloat(), cell.first.toFloat()) + Offset(inset, inset), Size(g.cell - inset * 2, g.cell - inset * 2))
+
+    val floor = g.point(cell.second + 0.5f, cell.first + 0.5f + STAR_FLOOR_Y)
+    // Aura behind the goti's body.
+    val auraCenter = Offset(floor.x, floor.y - g.cell * 0.45f)
+    drawCircle(
+        brush = Brush.radialGradient(listOf(StarGold.copy(alpha = 0.45f), StarGold.copy(alpha = 0f)), auraCenter, g.cell * 0.75f),
+        radius = g.cell * 0.75f,
+        center = auraCenter
+    )
+    // Gold star lying on the floor, wider than the base so its points clearly frame it.
+    val radius = g.cell * 0.62f
+    buildStarPath(sharedStarPath, floor, radius, flatten = 0.55f, innerRatio = 0.55f)
+    drawPath(sharedStarPath, Brush.verticalGradient(listOf(StarGoldLight, StarGold), floor.y - radius * 0.55f, floor.y + radius * 0.55f))
+    drawPath(sharedStarPath, StarGoldDark, style = Stroke(width = g.cell * 0.045f))
+}
+
+/** Landing on a star: a flat gold star ring spreads out while sparkles float up. */
+private fun DrawScope.drawSafeBurst(g: BoardGeometry, cell: Pair<Int, Int>, p: Float) {
+    val center = g.point(cell.second + 0.5f, cell.first + 0.5f + STAR_FLOOR_Y)
+    val fade = 1f - p
+    buildStarPath(sharedStarPath, center, g.cell * (0.5f + 1.1f * p), flatten = 0.5f, rotationDeg = p * 40f)
+    drawPath(sharedStarPath, StarGold.copy(alpha = 0.9f * fade), style = Stroke(width = g.cell * 0.12f * fade + 1f))
+    for (i in 0 until 6) {
+        val angle = i * (PI.toFloat() / 3f) + 0.3f
+        val spread = g.cell * 0.9f * p
+        drawCircle(
+            color = (if (i % 2 == 0) Color.White else StarGoldLight).copy(alpha = fade),
+            radius = g.cell * 0.07f * (0.5f + fade),
+            center = Offset(center.x + cos(angle) * spread, center.y + sin(angle) * spread * 0.5f - g.cell * 1.2f * p)
+        )
+    }
+}
+
+/** Five-point star; [flatten] squashes it vertically so it lies flat on the board. */
+private fun buildStarPath(
+    path: Path,
+    center: Offset,
+    radius: Float,
+    flatten: Float = 1f,
+    rotationDeg: Float = 0f,
+    innerRatio: Float = 0.45f
+) {
+    path.reset()
+    for (i in 0 until 10) {
+        val r = if (i % 2 == 0) radius else radius * innerRatio
+        val angle = Math.toRadians(i * 36.0 - 90.0 + rotationDeg)
+        val x = center.x + r * cos(angle).toFloat()
+        val y = center.y + r * sin(angle).toFloat() * flatten
+        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+    }
+    path.close()
+}
+
 // region Static board art
 
-// Main-thread-only scratch paths for the static layer.
-private val sharedStarPath = Path()
+// Main-thread-only scratch path for the static layer.
 private val sharedTrianglePath = Path()
 
 /** Bold solid base, white yard, and four solid coloured sockets. */
@@ -484,16 +572,7 @@ private fun DrawScope.drawSafeSquares(g: BoardGeometry) {
 }
 
 private fun DrawScope.drawStar(center: Offset, radius: Float, fillColor: Color, strokeColor: Color) {
-    val points = 5
-    sharedStarPath.reset()
-    for (i in 0 until points * 2) {
-        val r = if (i % 2 == 0) radius else radius * 0.45f
-        val angle = Math.toRadians((i * 360.0 / (points * 2)) - 90.0)
-        val x = center.x + r * cos(angle).toFloat()
-        val y = center.y + r * sin(angle).toFloat()
-        if (i == 0) sharedStarPath.moveTo(x, y) else sharedStarPath.lineTo(x, y)
-    }
-    sharedStarPath.close()
+    buildStarPath(sharedStarPath, center, radius)
     drawPath(sharedStarPath, color = fillColor, style = Fill)
     drawPath(sharedStarPath, color = strokeColor, style = Stroke(width = 1.4.dp.toPx()))
 }

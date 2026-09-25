@@ -21,7 +21,7 @@ data class BoardEffect(
     val cell: Pair<Int, Int>,
     val seq: Long
 ) {
-    enum class Kind { CAPTURE, FINISH }
+    enum class Kind { CAPTURE, FINISH, SAFE }
 }
 
 data class GameState(

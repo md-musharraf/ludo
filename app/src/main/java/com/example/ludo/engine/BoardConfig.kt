@@ -56,6 +56,11 @@ object BoardConfig {
 
     fun isSafe(cell: Pair<Int, Int>?): Boolean = cell != null && cell in safePositions
 
+    /** The star-marked safe squares (the coloured start squares are safe too, but unmarked). */
+    val starPositions: Set<Pair<Int, Int>> = starSpotIndices.mapTo(HashSet()) { mainTrack[it] }
+
+    fun isStar(cell: Pair<Int, Int>?): Boolean = cell != null && cell in starPositions
+
     val homePositions = mapOf(
         0 to listOf(Pair(1, 1), Pair(1, 4), Pair(4, 1), Pair(4, 4)),
         1 to listOf(Pair(1, 10), Pair(1, 13), Pair(4, 10), Pair(4, 13)),

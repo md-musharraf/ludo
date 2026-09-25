@@ -251,6 +251,15 @@ class GameEngine(
             note = " 💥 Captured an opponent!"
         }
 
+        // Reaching a star is worth celebrating: the goti is now safe from capture.
+        val safeNote = if (token.isOnMainTrack && BoardConfig.isStar(cell)) {
+            emitEffect(BoardEffect.Kind.SAFE, _state.value.players[playerIndex].color, cell)
+            SoundEffectManager.playLeaveBase()
+            "⭐ Safe on a star!"
+        } else {
+            null
+        }
+
         val finishedRank = markFinishedIfDone(playerIndex)
         if (finishGameIfDecided()) return
 
@@ -260,12 +269,12 @@ class GameEngine(
                     gamePhase = GamePhase.WAITING_FOR_ROLL,
                     validMoves = emptyList(),
                     diceResult = null,
-                    moveMessage = "$playerName gets a bonus turn!$note"
+                    moveMessage = "$playerName gets a bonus turn!${note.ifEmpty { safeNote?.let { " $it" } ?: "" }}"
                 )
             }
             continueTurn()
         } else {
-            advanceTurn(prefix = finishedRank?.let { "🏅 $playerName finished #$it!" })
+            advanceTurn(prefix = finishedRank?.let { "🏅 $playerName finished #$it!" } ?: safeNote)
         }
     }
 
