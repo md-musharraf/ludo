@@ -175,17 +175,22 @@ private const val EFFECT_MS = 700
 private const val INTRO_MS = 1100
 private const val LANDING_MS = 360
 
-/**
- * A pin spans from 1.57r above its anchor (head) to 0.6r below (ring and shadow), 2.17r in all.
- * Anchoring it 0.485r below a square's centre centres the whole pin in that square, and a
- * radius of 0.44 cells keeps it inside the square, so gotis never spill onto the neighbour
- * above or get clipped at the board's edge.
- */
-private const val PIN_CENTER_OFFSET = 0.485f
+/** Offset from a goti's anchor to its visual middle (used to aim taps at the pin body). */
+private const val PIN_CENTER_OFFSET = (PAWN_TOP - PAWN_BOTTOM) / 2
 
-/** Goti size (cell units) when alone on a square, and when waiting in its roomier yard. */
-private const val TRACK_PAWN_RADIUS = 0.44f
-private const val YARD_PAWN_RADIUS = 0.62f
+/**
+ * Track gotis stand with their base inside their own square (a small margin above the square's
+ * bottom edge); only the head may rise a little into the square above, as a standing piece would.
+ */
+private const val TRACK_PAWN_RADIUS = 0.52f
+private const val BASE_MARGIN = 0.05f
+
+/** Anchor offset below the square's centre that rests a goti of [radius] on the square's floor. */
+private fun baseAnchor(radius: Float) = 0.5f - BASE_MARGIN - PAWN_BOTTOM * radius
+
+/** Yard gotis are larger, their base seated low in the socket so they stand up above it. */
+private const val YARD_PAWN_RADIUS = 0.6f
+private const val YARD_BASE_DROP = 0.25f // Base centre below the socket centre, in cells
 
 /** Square board fitted and centred in the canvas; board coordinates are in cell units. */
 private class BoardGeometry(size: Size) {
@@ -234,8 +239,8 @@ private val SocketByHomeCell: Map<Pair<Int, Int>, Pair<Float, Float>> = buildMap
 
 /** Anchor (col, row) for an engine cell: a socket for yard cells, otherwise the square. */
 private fun anchorOf(cell: Pair<Int, Int>): Pair<Float, Float> =
-    SocketByHomeCell[cell]?.let { (c, r) -> c to r + PIN_CENTER_OFFSET * YARD_PAWN_RADIUS * 0.5f }
-        ?: ((cell.second + 0.5f) to (cell.first + 0.5f + PIN_CENTER_OFFSET * TRACK_PAWN_RADIUS))
+    SocketByHomeCell[cell]?.let { (c, r) -> c to r + YARD_BASE_DROP - 0.3f * YARD_PAWN_RADIUS }
+        ?: ((cell.second + 0.5f) to (cell.first + 0.5f + baseAnchor(TRACK_PAWN_RADIUS)))
 
 // Finished gotis line up inside their colour's centre triangle: (col, row, lineIsHorizontal).
 private val GoalAnchors = arrayOf(
@@ -281,7 +286,7 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
         occupants.forEachIndexed { index, (player, token) ->
             val (dx, dy, radius) = stackOffset(occupants.size, index)
             val isValid = humanChoosing && player.id == current?.id && token.id in state.validMoves
-            val drop = PIN_CENTER_OFFSET * radius
+            val drop = baseAnchor(radius)
             spots += PawnSpot(player.id, token.id, player.color, col + 0.5f + dx, row + 0.5f + dy + drop, radius, isValid)
         }
     }
@@ -292,22 +297,22 @@ private fun layoutPawns(state: GameState): List<PawnSpot> {
 }
 
 /**
- * Offset (cell units) and radius for the [index]-th of [count] gotis sharing a cell, chosen so
- * every pin (height 2.17r, ring width 1.3r) stays inside the square.
+ * Offset (cell units) and radius for the [index]-th of [count] gotis sharing a cell. Front-row
+ * gotis rest on the square's floor (dy = 0); back-row ones stand a little further up.
  */
 private fun stackOffset(count: Int, index: Int): Triple<Float, Float, Float> = when (count) {
     1 -> Triple(0f, 0f, TRACK_PAWN_RADIUS)
-    2 -> if (index == 0) Triple(-0.21f, 0f, 0.36f) else Triple(0.21f, 0f, 0.36f)
+    2 -> if (index == 0) Triple(-0.21f, 0f, 0.42f) else Triple(0.21f, 0f, 0.42f)
     3 -> when (index) {
-        0 -> Triple(0f, -0.12f, 0.3f)
-        1 -> Triple(-0.22f, 0.12f, 0.3f)
-        else -> Triple(0.22f, 0.12f, 0.3f)
+        0 -> Triple(0f, -0.2f, 0.36f)
+        1 -> Triple(-0.22f, 0f, 0.36f)
+        else -> Triple(0.22f, 0f, 0.36f)
     }
     else -> when (index % 4) {
-        0 -> Triple(-0.2f, -0.19f, 0.25f)
-        1 -> Triple(0.2f, -0.19f, 0.25f)
-        2 -> Triple(-0.2f, 0.19f, 0.25f)
-        else -> Triple(0.2f, 0.19f, 0.25f)
+        0 -> Triple(-0.2f, -0.22f, 0.32f)
+        1 -> Triple(0.2f, -0.22f, 0.32f)
+        2 -> Triple(-0.2f, 0f, 0.32f)
+        else -> Triple(0.2f, 0f, 0.32f)
     }
 }
 
